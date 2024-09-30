@@ -71,11 +71,17 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         data = [d.to(device) for d in data]
         for i in range(len(data)):
             if len(data[i].shape) == 4:
+                print(data[i].shape)
                 data[i] = data[i].transpose(0, 1).contiguous()
+                print(data[i].shape)
                 data[i] = data[i].view(data[i].size(0), -1, data[i].size(-1))
+                print(data[i].shape)
             else:
+                print(data[i].shape)
                 data[i] = data[i][:, :data[i].size(1), :].contiguous()
+                print(data[i].shape)
                 data[i] = data[i].view(-1, data[i].size(-1))  
+                print(data[i].shape)
 
         locs, vels, loc_ends = data
         loc, loc_end, vel = locs[30], locs[40], vels[30]
