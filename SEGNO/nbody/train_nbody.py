@@ -71,11 +71,11 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         data = [d.to(device) for d in data]
         for i in range(len(data)):
             if len(data[i].shape) == 4:
-                print(data[i].shape)
+                
                 data[i] = data[i].transpose(0, 1).contiguous()
-                print(data[i].shape)
+                
                 data[i] = data[i].view(data[i].size(0), -1, data[i].size(-1))
-                print(data[i].shape)
+                
             else:
                 
                 data[i] = data[i][:, :data[i].size(1), :].contiguous()
@@ -88,7 +88,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         
         batch = torch.arange(0, batch_size)
         batch = batch.repeat_interleave(n_nodes).long().to(device)
-        print(loc.shape,batch.shape)
+        
         edge_index = knn_graph(loc, 4, batch)
         h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
         rows, cols = edge_index
