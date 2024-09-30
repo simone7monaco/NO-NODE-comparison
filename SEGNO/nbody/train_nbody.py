@@ -79,9 +79,10 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
 
         locs, vels, loc_ends = data
         loc, loc_end, vel = locs[30], locs[40], vels[30]
-
+        
         batch = torch.arange(0, batch_size)
         batch = batch.repeat_interleave(n_nodes).long().to(device)
+        print(loc.shape,batch.shape)
         edge_index = knn_graph(loc, 4, batch)
         h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
         rows, cols = edge_index
