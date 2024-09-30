@@ -64,10 +64,10 @@ class NBodyDataset():
             frame_0, frame_T = 20, 30
         else:
             raise Exception("Wrong dataset partition %s" % self.dataset_name)
-        print(loc.shape)
-        loc = torch.transpose(loc, 1, 2)
-        vel = torch.transpose(vel, 1, 2)
-        print(loc.shape)
+        #print(loc.shape)
+        #loc = torch.transpose(loc, 1, 2)
+        #vel = torch.transpose(vel, 1, 2)
+        #print(loc.shape)
         return loc, vel, loc
 
     def __len__(self):
