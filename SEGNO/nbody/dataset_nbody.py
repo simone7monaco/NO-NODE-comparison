@@ -22,7 +22,7 @@ class NBodyDataset():
         if dataset_name == "nbody":
             self.suffix += "_gravity5_initvel1"
         elif dataset_name == "nbody_small" or dataset_name == "nbody_small_out_dist":
-            self.suffix += "_gravity5_initvel1small"
+            self.suffix += "_charged5_initvel1small"
         else:
             raise Exception("Wrong dataset name %s" % self.dataset_name)
 
