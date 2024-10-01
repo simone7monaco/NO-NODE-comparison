@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description='EGNO')
 parser.add_argument('--exp_name', type=str, default='exp_1', metavar='N', help='experiment_name')
 parser.add_argument('--batch_size', type=int, default=100, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=10000, metavar='N',
+parser.add_argument('--epochs', type=int, default=1000, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -32,7 +32,7 @@ parser.add_argument('--lr', type=float, default=5e-4, metavar='N',
                     help='learning rate')
 parser.add_argument('--nf', type=int, default=64, metavar='N',
                     help='hidden dim')
-parser.add_argument('--model', type=str, default='hier', metavar='N')
+parser.add_argument('--model', type=str, default='egno', metavar='N')
 parser.add_argument('--n_layers', type=int, default=4, metavar='N',
                     help='number of layers for the autoencoder')
 parser.add_argument('--max_training_samples', type=int, default=3000, metavar='N',
