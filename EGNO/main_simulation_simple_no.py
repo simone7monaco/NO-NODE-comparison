@@ -60,6 +60,10 @@ parser.add_argument('--decoder_layer', type=int, default=1,
 parser.add_argument('--norm', action='store_true', default=False,
                     help='Use norm in EGNO')
 
+parser.add_argument('--n_nodes', type=int, default=5,
+                    help='The number of nodes.')
+parser.add_argument('--n_nodes_test', type=int, default=5,
+                    help='The number of nodes for the test set.')
 parser.add_argument('--num_timesteps', type=int, default=1,
                     help='The number of time steps.')
 parser.add_argument('--time_emb_dim', type=int, default=32,
@@ -147,7 +151,7 @@ def main():
         results['train loss'].append(train_loss)
         if epoch % args.test_interval == 0:
             val_loss = train(model, optimizer, epoch, loader_val, backprop=False)
-            test_loss = train(model, optimizer, epoch, loader_test, backprop=False)
+            test_loss = train(model, optimizer, epoch, loader_test, backprop=False, test=True)
 
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
@@ -171,7 +175,7 @@ def main():
     return best_train_loss, best_val_loss, best_test_loss, best_epoch
 
 
-def train(model, optimizer, epoch, loader, backprop=True):
+def train(model, optimizer, epoch, loader, backprop=True, test=False):
     if backprop:
         model.train()
     else:
@@ -182,7 +186,10 @@ def train(model, optimizer, epoch, loader, backprop=True):
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_end = data
-        n_nodes = 5
+        if test:
+            n_nodes = args.n_nodes_test
+        else:
+            n_nodes = args.n_nodes
         loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))  # [BN, 3]
 
         loc = loc.view(-1, loc.shape[-1])
