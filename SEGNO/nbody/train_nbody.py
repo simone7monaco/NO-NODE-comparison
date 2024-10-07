@@ -43,7 +43,7 @@ def train(gpu, args):
 
             val_loss, res = run_epoch(model, optimizer, loss_mse, epoch, loader_val, device, args, backprop=False)
             test_loss, res = run_epoch(model, optimizer, loss_mse, epoch, loader_test,
-                                  device, args, backprop=False)
+                                  device, args, backprop=False,test=True)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -57,14 +57,17 @@ def train(gpu, args):
     return best_val_loss, best_test_loss, best_epoch
 
 
-def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop=True):
+def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop=True,test=False):
     if backprop:
         model.train()
     else:
         model.eval()
 
     res = {'epoch': epoch, 'loss': 0, 'counter': 0, 'long_loss': {}}
-    n_nodes = 5
+    if test:
+        n_nodes = args.n_nodes_test
+    else:
+        n_nodes = args.n_nodes
     batch_size = args.batch_size
 
     for batch_idx, data in enumerate(loader):

@@ -19,7 +19,7 @@ def _find_free_port():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-
+    
     # Run parameters
     parser.add_argument('--epochs', type=int, default=1000,
                         help='number of epochs')
@@ -47,6 +47,10 @@ if __name__ == "__main__":
                         help='Download flag')
 
     # Nbody parameters:
+    parser.add_argument('--n_nodes', type=int, default=5,
+                    help='The number of nodes.')
+    parser.add_argument('--n_nodes_test', type=int, default=5,
+                    help='The number of nodes for the test set.')
     parser.add_argument('--nbody_name', type=str, default="nbody_small",
                         help='Name of nbody data [nbody, nbody_small]')
     parser.add_argument('--max_samples', type=int, default=3000,
