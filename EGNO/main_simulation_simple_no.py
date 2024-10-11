@@ -60,10 +60,6 @@ parser.add_argument('--decoder_layer', type=int, default=1,
 parser.add_argument('--norm', action='store_true', default=False,
                     help='Use norm in EGNO')
 
-parser.add_argument('--n_nodes', type=int, default=5,
-                    help='The number of nodes.')
-parser.add_argument('--n_nodes_test', type=int, default=5,
-                    help='The number of nodes for the test set.')
 parser.add_argument('--num_timesteps', type=int, default=1,
                     help='The number of time steps.')
 parser.add_argument('--time_emb_dim', type=int, default=32,
@@ -186,10 +182,8 @@ def train(model, optimizer, epoch, loader, backprop=True, test=False):
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_end = data
-        if test:
-            n_nodes = args.n_nodes_test
-        else:
-            n_nodes = args.n_nodes
+        n_nodes = 5
+        
         loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))  # [BN, 3]
 
         loc = loc.view(-1, loc.shape[-1])

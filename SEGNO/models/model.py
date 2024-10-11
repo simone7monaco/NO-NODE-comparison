@@ -42,4 +42,4 @@ class SEGNO(nn.Module):
             his, x, v, _ = self.module(h, edges, x, v, vel, edge_attr=edge_attr)
             h = h + his
 
-        return x, h
+        return x, h, v

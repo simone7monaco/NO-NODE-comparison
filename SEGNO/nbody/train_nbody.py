@@ -43,7 +43,7 @@ def train(gpu, args):
 
             val_loss, res = run_epoch(model, optimizer, loss_mse, epoch, loader_val, device, args, backprop=False)
             test_loss, res = run_epoch(model, optimizer, loss_mse, epoch, loader_test,
-                                  device, args, backprop=False,test=True)
+                                  device, args, backprop=False,rollout=True)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -57,17 +57,15 @@ def train(gpu, args):
     return best_val_loss, best_test_loss, best_epoch
 
 
-def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop=True,test=False):
+def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop=True,rollout=False):
     if backprop:
         model.train()
     else:
         model.eval()
 
     res = {'epoch': epoch, 'loss': 0, 'counter': 0, 'long_loss': {}}
-    if test:
-        n_nodes = args.n_nodes_test
-    else:
-        n_nodes = args.n_nodes
+
+    n_nodes = 5
     batch_size = args.batch_size
 
     for batch_idx, data in enumerate(loader):
@@ -97,8 +95,16 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         rows, cols = edge_index
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
         edge_attr = loc_dist.detach()
-        loc_pred, h = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
-        loss = criterion(loc_pred, loc_end)
+
+        if rollout:
+            locs_true = locs[40::10]
+            traj_len = locs_true.shape[0]
+            rollout_fn(model,h, loc, edge_index, vel, edge_attr, traj_len)
+            #loss with metric 
+        else:
+            loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+            loss = criterion(loc_pred, loc_end)
+
         res['loss'] += loss.item()*batch_size
 
         if backprop:    
@@ -115,3 +121,61 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
     print('%s epoch %d avg loss: %.5f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter']))
 
     return res['loss'] / res['counter'], res
+
+
+def rollout_fn(model, h, loc, edge_index, v, edge_attr, traj_len):
+
+    loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
+    vel = v
+    for i in range(traj_len):
+
+        loc, h, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+        loc_preds[i] = loc
+    
+    return loc_preds
+
+def pearson_correlation_batch(x, y, N):
+    """
+    Compute the Pearson correlation for each time step (T) in each batch (B).
+    
+    Args:
+    - x: Tensor of shape (T, B*N, 3), predicted states.
+    - y: Tensor of shape (T, B*N, 3), ground truth states.
+    
+    Returns:
+    - correlations: Tensor of shape (B, T), Pearson correlation for each time step in each batch.
+    """
+    
+    # Reshape to (B, T, N*3) 
+    B = x.size(1) // N
+    x = x.view( B,x.shape[0], -1)  # Flatten N and 3 into a single dimension
+    y = y.view( B,y.shape[0], -1)
+
+    # Mean subtraction
+    mean_x = x.mean(dim=2, keepdim=True)
+    mean_y = y.mean(dim=2, keepdim=True)
+    
+    xm = x - mean_x
+    ym = y - mean_y
+
+    # Compute covariance between x and y along the flattened dimensions
+    covariance = (xm * ym).sum(dim=2)
+
+    # Compute standard deviations along the flattened dimensions
+    std_x = torch.sqrt((xm ** 2).sum(dim=2))
+    std_y = torch.sqrt((ym ** 2).sum(dim=2))
+
+    # Compute Pearson correlation for each sample in the batch
+    correlation = covariance / (std_x * std_y)
+
+    #number of steps before reaching a value of correlation, between prediction and ground truth for each timesteps, lower than 0.5
+    num_steps_batch = []
+
+    for i in range(correlation.shape[0]):
+ 
+        num_steps_before = (correlation[i] < 0.5).nonzero(as_tuple=True)[0][0].item()
+        num_steps_batch.append(num_steps_before)
+
+    return correlation, num_steps_batch
+
+
