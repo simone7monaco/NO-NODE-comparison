@@ -126,7 +126,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         prefix = "==> "
     else:
         prefix = ""
-    print('%s epoch %d avg loss: %.5f avg num steps %.4f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['avg_num_steps'] / res['counter']))
+    print('%s epoch %d avg loss: %.5f avg num steps %.4f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['avg_num_steps']))
 
     return res['loss'] / res['counter'], res
 
