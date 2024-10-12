@@ -31,13 +31,13 @@ def train(gpu, args):
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     loss_mse = nn.MSELoss()
-
+    loss_mse_no_red = nn.MSELoss(reduction='none')
     best_val_loss = 1e8
     best_test_loss = 1e8
     best_epoch = 0
     best = {'long_loss': {}}
     for epoch in range(0, args.epochs):
-        train_loss, _ = run_epoch(model, optimizer, loss_mse, epoch, loader_train, device, args)
+        train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args)
 
         if epoch % args.test_interval == 0 or epoch == args.epochs-1:
 
@@ -50,8 +50,8 @@ def train(gpu, args):
                 best_test_loss = test_loss
                 best_epoch = epoch
                 best = res
-            print("*** Best Val Loss: %.5f \t Best Test Loss: %.5f \t Best epoch %d" %
-                  (best_val_loss, best_test_loss, best_epoch))
+            print("*** Best Val Loss: %.5f \t Best Test Loss: %.5f \t Best Test avg num steps: %.4f \t Best epoch %d" %
+                  (best_val_loss, best_test_loss, best["avg_num_steps"], best_epoch))
             # print(best['long_loss'])
 
     return best_val_loss, best_test_loss, best_epoch
@@ -63,8 +63,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
     else:
         model.eval()
 
-    res = {'epoch': epoch, 'loss': 0, 'counter': 0, 'long_loss': {}}
-
+    res = {'epoch': epoch, 'loss': 0, "tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'long_loss': {}}
+    criterion, loss_mse_no_red = criterion[0], criterion[1]
     n_nodes = 5
     batch_size = args.batch_size
 
@@ -97,10 +97,18 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         edge_attr = loc_dist.detach()
 
         if rollout:
-            locs_true = locs[40::10]
+            locs_true = locs[40:130:10]
             traj_len = locs_true.shape[0]
-            rollout_fn(model,h, loc, edge_index, vel, edge_attr, traj_len)
-            #loss with metric 
+            locs_pred = rollout_fn(model,h, loc, edge_index, vel, edge_attr, traj_len)
+
+            corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true)
+            res["tot_num_steps"] += avg_num_steps*batch_size
+            res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
+
+            #loss with metric (A-MSE)
+            losses = loss_mse_no_red(locs_pred, locs_true).view(traj_len, batch_size * n_nodes, 3)
+            losses = torch.mean(losses, dim=(1, 2))
+            loss = torch.mean(losses)
         else:
             loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
             loss = criterion(loc_pred, loc_end)
@@ -118,7 +126,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         prefix = "==> "
     else:
         prefix = ""
-    print('%s epoch %d avg loss: %.5f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter']))
+    print('%s epoch %d avg loss: %.5f avg num steps %.4f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['avg_num_steps'] / res['counter']))
 
     return res['loss'] / res['counter'], res
 
@@ -176,6 +184,7 @@ def pearson_correlation_batch(x, y, N):
         num_steps_before = (correlation[i] < 0.5).nonzero(as_tuple=True)[0][0].item()
         num_steps_batch.append(num_steps_before)
 
-    return correlation, num_steps_batch
+    #return the average (in the batch) number of steps before reaching a value of correlation lower than 0.5
+    return correlation, torch.mean(num_steps_batch)
 
 
