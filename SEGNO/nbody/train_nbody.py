@@ -101,7 +101,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             traj_len = locs_true.shape[0]
             locs_pred = rollout_fn(model,h, loc, edge_index, vel, edge_attr, traj_len)
 
-            corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true)
+            corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
             res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
 
