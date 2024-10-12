@@ -137,7 +137,7 @@ def rollout_fn(model, h, loc, edge_index, v, edge_attr, traj_len):
     vel = v
     for i in range(traj_len):
 
-        loc, h, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+        loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
         loc_preds[i] = loc
     
     return loc_preds
