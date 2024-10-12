@@ -97,9 +97,9 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         edge_attr = loc_dist.detach()
 
         if rollout:
-            locs_true = locs[40:130:10]
+            locs_true = locs[40:130:10].to(device)
             traj_len = locs_true.shape[0]
-            locs_pred = rollout_fn(model,h, loc, edge_index, vel, edge_attr, traj_len)
+            locs_pred = rollout_fn(model,h, loc, edge_index, vel, edge_attr, traj_len).to(device)
 
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
