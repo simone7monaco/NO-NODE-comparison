@@ -155,9 +155,10 @@ def pearson_correlation_batch(x, y, N):
     """
     
     # Reshape to (B, T, N*3) 
+    T = x.shape[0]
     B = x.size(1) // N
-    x = x.reshape( B, x.shape[0], -1)  # Flatten N and 3 into a single dimension
-    y = y.reshape( B, y.shape[0], -1)
+    x = x.reshape( B, T, -1)  # Flatten N and 3 into a single dimension
+    y = y.reshape( B, T, -1)
 
     # Mean subtraction
     mean_x = x.mean(dim=2, keepdim=True)
@@ -180,8 +181,11 @@ def pearson_correlation_batch(x, y, N):
     num_steps_batch = []
 
     for i in range(correlation.shape[0]):
- 
-        num_steps_before = (correlation[i] < 0.5).nonzero(as_tuple=True)[0][0].item()
+        
+        if any(correlation[i] < 0.5):
+            num_steps_before = (correlation[i] < 0.5).nonzero(as_tuple=True)[0][0].item()
+        else:
+            num_steps_before = T
         num_steps_batch.append(num_steps_before)
 
     #return the average (in the batch) number of steps before reaching a value of correlation lower than 0.5
