@@ -189,6 +189,6 @@ def pearson_correlation_batch(x, y, N):
         num_steps_batch.append(num_steps_before)
 
     #return the average (in the batch) number of steps before reaching a value of correlation lower than 0.5
-    return correlation, torch.mean(num_steps_batch)
+    return correlation, torch.mean(torch.Tensor(num_steps_batch))
 
 
