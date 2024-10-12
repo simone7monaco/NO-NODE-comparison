@@ -41,8 +41,8 @@ def train(gpu, args):
 
         if epoch % args.test_interval == 0 or epoch == args.epochs-1:
 
-            val_loss, res = run_epoch(model, optimizer, loss_mse, epoch, loader_val, device, args, backprop=False)
-            test_loss, res = run_epoch(model, optimizer, loss_mse, epoch, loader_test,
+            val_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_val, device, args, backprop=False)
+            test_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_test,
                                   device, args, backprop=False,rollout=True)
 
             if val_loss < best_val_loss:
