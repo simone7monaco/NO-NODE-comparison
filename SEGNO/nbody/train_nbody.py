@@ -156,8 +156,8 @@ def pearson_correlation_batch(x, y, N):
     
     # Reshape to (B, T, N*3) 
     B = x.size(1) // N
-    x = x.view( B,x.shape[0], -1)  # Flatten N and 3 into a single dimension
-    y = y.view( B,y.shape[0], -1)
+    x = x.reshape( B, x.shape[0], -1)  # Flatten N and 3 into a single dimension
+    y = y.reshape( B, y.shape[0], -1)
 
     # Mean subtraction
     mean_x = x.mean(dim=2, keepdim=True)
