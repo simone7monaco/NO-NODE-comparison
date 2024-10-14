@@ -205,14 +205,14 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
 
             if rollout:
                 traj_len = 10
-                locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1).contiguous().view(-1, 3)
+                locs_true = loc_true.view(args.num_timesteps*traj_len, batch_size * n_nodes, 3)
                 
                 locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len).to(device)
                 corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
                 #loss with metric (A-MSE)
-                losses = loss_mse(locs_pred, locs_true).view(args.num_timesteps*traj_len, batch_size * n_nodes, 3)
+                losses = loss_mse(locs_pred, locs_true) #.view(args.num_timesteps*traj_len, batch_size * n_nodes, 3)
                 losses = torch.mean(losses, dim=(1, 2))
                 loss = torch.mean(losses)
             else:
@@ -262,7 +262,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))
         loc = loc.view(-1, loc.shape[-1])
 
-    return loc_preds
+    return loc_preds.view(num_steps*traj_len, -1, 3)
 
 def pearson_correlation_batch(x, y, N):
     """
