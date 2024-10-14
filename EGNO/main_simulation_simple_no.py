@@ -253,11 +253,13 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
         loc_preds[i] = loc
         nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
-        loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))
         rows, cols = edges
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
         edge_attr = torch.cat([edge_attr_o, loc_dist], 1).detach()  # concatenate all edge properties
-    
+        loc = loc.view(-1, n_nodes, loc.shape[-1])
+        loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))
+        loc = loc.view(-1, loc.shape[-1])
+        
     return loc_preds
 
 def pearson_correlation_batch(x, y, N):
