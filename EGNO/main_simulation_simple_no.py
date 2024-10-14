@@ -147,7 +147,7 @@ def main():
         results['train loss'].append(train_loss)
         if epoch % args.test_interval == 0:
             val_loss = train(model, optimizer, epoch, loader_val, backprop=False)
-            test_loss = train(model, optimizer, epoch, loader_test, backprop=False, test=True)
+            test_loss = train(model, optimizer, epoch, loader_test, backprop=False, rollout=True)
 
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
@@ -171,7 +171,7 @@ def main():
     return best_train_loss, best_val_loss, best_test_loss, best_epoch
 
 
-def train(model, optimizer, epoch, loader, backprop=True, test=False):
+def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
     if backprop:
         model.train()
     else:
@@ -201,7 +201,14 @@ def train(model, optimizer, epoch, loader, backprop=True, test=False):
             rows, cols = edges
             loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
             edge_attr = torch.cat([edge_attr, loc_dist], 1).detach()  # concatenate all edge properties
-            loc_pred, vel_pred, _ = model(loc, nodes, edges, edge_attr, v=vel, loc_mean=loc_mean)
+
+            if rollout:
+
+                traj_len = 10
+                locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr, traj_len).to(device)
+
+            else:
+                loc_pred, vel_pred, _ = model(loc, nodes, edges, edge_attr, v=vel, loc_mean=loc_mean)
         else:
             raise Exception("Wrong model")
 
@@ -225,13 +232,13 @@ def train(model, optimizer, epoch, loader, backprop=True, test=False):
     return res['loss'] / res['counter']
 
 
-def rollout_fn(model, h, loc, edge_index, v, edge_attr, traj_len):
+def rollout_fn(model, nodes, loc, edges, v, edge_attr, traj_len):
 
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
     vel = v
     for i in range(traj_len):
 
-        loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+        loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,vel.detach())
         loc_preds[i] = loc
     
     return loc_preds

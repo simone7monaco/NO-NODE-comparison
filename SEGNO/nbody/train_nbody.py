@@ -99,7 +99,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         if rollout:
             locs_true = locs[40:130:10].to(device)
             traj_len = locs_true.shape[0]
-            locs_pred = rollout_fn(model,h, loc, edge_index, vel, edge_attr, traj_len).to(device)
+            locs_pred = rollout_fn(model,h, loc, edge_index, vel, edge_attr, batch, traj_len).to(device)
 
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
@@ -131,7 +131,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
     return res['loss'] / res['counter'], res
 
 
-def rollout_fn(model, h, loc, edge_index, v, edge_attr, traj_len):
+def rollout_fn(model, h, loc, edge_index, v, edge_attr, batch, traj_len):
 
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
     vel = v
@@ -139,6 +139,11 @@ def rollout_fn(model, h, loc, edge_index, v, edge_attr, traj_len):
 
         loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
         loc_preds[i] = loc
+        edge_index = knn_graph(loc, 4, batch)
+        h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+        rows, cols = edge_index
+        loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
+        edge_attr = loc_dist.detach()
     
     return loc_preds
 
