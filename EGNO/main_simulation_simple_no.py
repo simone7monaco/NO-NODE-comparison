@@ -246,7 +246,7 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
 
 def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len):
 
-    loc_preds = torch.zeros((traj_len,loc.shape[0],10,loc.shape[1]))
+    loc_preds = torch.zeros((traj_len,loc.shape[0]*10,loc.shape[1]))
     vel = v
     for i in range(traj_len):
 
