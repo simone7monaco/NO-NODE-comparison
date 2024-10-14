@@ -253,6 +253,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
         loc_preds[i] = loc
         loc = loc.view(num_steps, -1, loc.shape[-1])[-1] #get last element in the inner trajectory
+        vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory
         nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
         rows, cols = edges
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
