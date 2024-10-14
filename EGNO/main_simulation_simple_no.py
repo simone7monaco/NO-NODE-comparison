@@ -245,12 +245,13 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
 
 
 def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len):
-
-    loc_preds = torch.zeros((traj_len,loc.shape[0]*10,loc.shape[1]))
+    num_steps=10
+    loc_preds = torch.zeros((traj_len,loc.shape[0]*num_steps,loc.shape[1]))
     vel = v
     for i in range(traj_len):
 
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
+        loc = loc.view(num_steps, -1, loc.shape[-1])[-1] #get last element in the inner trajectory
         loc_preds[i] = loc
         nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
         rows, cols = edges
@@ -259,7 +260,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc = loc.view(-1, n_nodes, loc.shape[-1])
         loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))
         loc = loc.view(-1, loc.shape[-1])
-        
+
     return loc_preds
 
 def pearson_correlation_batch(x, y, N):
