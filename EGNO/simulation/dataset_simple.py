@@ -100,8 +100,10 @@ class NBodyDataset():
 
 
 class NBodyDynamicsDataset(NBodyDataset):
-    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", num_timesteps=1):
+    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", num_timesteps=1, rollout=False, traj_len=1):
         self.num_timesteps = num_timesteps
+        self.rollout = rollout
+        self.traj_len = traj_len
         super(NBodyDynamicsDataset, self).__init__(partition, data_dir, max_samples, dataset_name)
 
     def __getitem__(self, i):
@@ -117,24 +119,57 @@ class NBodyDynamicsDataset(NBodyDataset):
         else:
             raise Exception("Wrong dataset partition %s" % self.dataset_name)
 
-        delta_frame = frame_T - frame_0
-        last = False
-        if last:
-            locs = [loc[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+        if self.rollout:
+            
+            delta_frame = frame_T - frame_0
+            for i in range(self.traj_len):
+                last = False
+                #location
+                if last:
+                    locs = [loc[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+                else:
+                    locs = [loc[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+                locs = np.stack(locs, axis=1) 
+                if i == 0: # first iter
+                    locs_m = locs
+                else:
+                    locs_m = np.concatenate((locs_m,locs),axis=1)
+                #velocity
+                if last:
+                    vels = [vel[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+                else:
+                    vels = [vel[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+                vels = np.stack(vels, axis=1)
+                if i == 0: # first iter
+                    vels_m = vels
+                else:
+                    vels_m = np.concatenate((vels_m,vels),axis=1)
+
+                frame_0 += 10
+                
+            frame_0 = 30
+            locs = locs_m
+
         else:
-            locs = [loc[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-        locs = np.stack(locs, axis=1)
-        if last:
-            vels = [vel[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-        else:
-            vels = [vel[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-        vels = np.stack(vels, axis=1)
+            delta_frame = frame_T - frame_0
+            last = False
+            if last:
+                locs = [loc[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+            else:
+                locs = [loc[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+            locs = np.stack(locs, axis=1)
+            if last:
+                vels = [vel[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+            else:
+                vels = [vel[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+            vels = np.stack(vels, axis=1)
 
         return loc[frame_0], vel[frame_0], edge_attr, charges, locs
 
 
 if __name__ == "__main__":
-    dataset = NBodyDynamicsDataset('train', data_dir='./dataset', max_samples=3000, num_timesteps=6)
+    dataset = NBodyDynamicsDataset('train', data_dir='./dataset', max_samples=3000, num_timesteps=100)
     for i in dataset[100]:
         print(i.shape)
+        print(i)
 

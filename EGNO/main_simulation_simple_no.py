@@ -120,7 +120,7 @@ def main():
                                              num_workers=0)
 
     dataset_test = SimulationDataset(partition='test',
-                                     data_dir=args.data_dir, num_timesteps=args.num_timesteps)
+                                     data_dir=args.data_dir, num_timesteps=args.num_timesteps, rollout=True, traj_len=10)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                               num_workers=0)
 
@@ -147,7 +147,7 @@ def main():
         results['train loss'].append(train_loss)
         if epoch % args.test_interval == 0:
             val_loss = train(model, optimizer, epoch, loader_val, backprop=False)
-            test_loss = train(model, optimizer, epoch, loader_test, backprop=False, rollout=True)
+            test_loss, avg_num_steps = train(model, optimizer, epoch, loader_test, backprop=False, rollout=True)
 
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
@@ -156,10 +156,11 @@ def main():
                 best_val_loss = val_loss
                 best_test_loss = test_loss
                 best_train_loss = train_loss
+                best_avg_num_steps = avg_num_steps
                 best_epoch = epoch
                 # Save model is move to early stopping.
-            print("*** Best Val Loss: %.5f \t Best Test Loss: %.5f \t Best epoch %d"
-                  % (best_val_loss, best_test_loss, best_epoch))
+            print("*** Best Val Loss: %.5f \t Best Test Loss: %.5f \t Best Test avg num steps: %.4f \t Best epoch %d"
+                  % (best_val_loss, best_test_loss, best_avg_num_steps, best_epoch))
             early_stopping(val_loss, model)
             if early_stopping.early_stop:
                 print("Early Stopping.")
@@ -177,20 +178,20 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
     else:
         model.eval()
 
-    res = {'epoch': epoch, 'loss': 0, 'counter': 0, 'lp_loss': 0}
+    res = {'epoch': epoch, 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
 
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
-        loc, vel, edge_attr, charges, loc_end = data
+        loc, vel, edge_attr, charges, loc_true = data
         n_nodes = 5
         
         loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))  # [BN, 3]
 
         loc = loc.view(-1, loc.shape[-1])
         vel = vel.view(-1, vel.shape[-1])
-        edge_attr = edge_attr.view(-1, edge_attr.shape[-1])
+        edge_attr_o = edge_attr.view(-1, edge_attr.shape[-1])
         batch_size = loc.shape[0] // n_nodes
-        loc_end = loc_end.view(batch_size * n_nodes, args.num_timesteps, 3).transpose(0, 1).contiguous().view(-1, 3)
+        
         edges = loader.dataset.get_edges(batch_size, n_nodes)
         edges = [edges[0].to(device), edges[1].to(device)]
 
@@ -200,21 +201,30 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
             nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
             rows, cols = edges
             loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
-            edge_attr = torch.cat([edge_attr, loc_dist], 1).detach()  # concatenate all edge properties
+            edge_attr = torch.cat([edge_attr_o, loc_dist], 1).detach()  # concatenate all edge properties
 
             if rollout:
-
                 traj_len = 10
-                locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr, traj_len).to(device)
-
+                locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1).contiguous().view(-1, 3)
+                
+                locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr, traj_len).to(device)
+                corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
+                res["tot_num_steps"] += avg_num_steps*batch_size
+                res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
+                #loss with metric (A-MSE)
+                losses = loss_mse(locs_pred, locs_true).view(args.num_timesteps*traj_len, batch_size * n_nodes, 3)
+                losses = torch.mean(losses, dim=(1, 2))
+                loss = torch.mean(losses)
             else:
+                loc_end = loc_true.view(batch_size * n_nodes, args.num_timesteps, 3).transpose(0, 1).contiguous().view(-1, 3)
                 loc_pred, vel_pred, _ = model(loc, nodes, edges, edge_attr, v=vel, loc_mean=loc_mean)
+                losses = loss_mse(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
+                losses = torch.mean(losses, dim=(1, 2))
+                loss = torch.mean(losses)
         else:
             raise Exception("Wrong model")
-
-        losses = loss_mse(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
-        losses = torch.mean(losses, dim=(1, 2))
-        loss = torch.mean(losses)
+        
+            
 
         if backprop:
             loss.backward()
@@ -228,11 +238,13 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
         prefix = ""
     print('%s epoch %d avg loss: %.5f avg lploss: %.5f'
           % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['lp_loss'] / res['counter']))
+    if rollout:
+        return res['loss'] / res['counter'], res['avg_num_steps']
+    else:
+        return res['loss'] / res['counter']
 
-    return res['loss'] / res['counter']
 
-
-def rollout_fn(model, nodes, loc, edges, v, edge_attr, traj_len):
+def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, traj_len):
 
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
     vel = v
@@ -240,6 +252,10 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr, traj_len):
 
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,vel.detach())
         loc_preds[i] = loc
+        nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+        rows, cols = edges
+        loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
+        edge_attr = torch.cat([edge_attr_o, loc_dist], 1).detach()  # concatenate all edge properties
     
     return loc_preds
 
