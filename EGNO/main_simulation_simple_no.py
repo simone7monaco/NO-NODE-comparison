@@ -207,7 +207,7 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
                 traj_len = 10
                 locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1).contiguous().view(-1, 3)
                 
-                locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr, traj_len).to(device)
+                locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len).to(device)
                 corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
@@ -244,15 +244,16 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
         return res['loss'] / res['counter']
 
 
-def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, traj_len):
+def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len):
 
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
     vel = v
     for i in range(traj_len):
 
-        loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,vel.detach())
+        loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
         loc_preds[i] = loc
         nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+        loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))
         rows, cols = edges
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
         edge_attr = torch.cat([edge_attr_o, loc_dist], 1).detach()  # concatenate all edge properties
