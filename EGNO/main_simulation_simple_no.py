@@ -209,12 +209,15 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
                 
                 locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len).to(device)
                 corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
+                print(torch.isnan(locs_pred).any(),torch.isnan(locs_true).any())
                 locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
                 locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
+                print(torch.isnan(locs_pred).any(),torch.isnan(locs_true).any())
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
                 #loss with metric (A-MSE)
                 losses = loss_mse(locs_pred, locs_true).view(args.num_timesteps*traj_len, batch_size * n_nodes, 3)
+                print(torch.isnan(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
                 loss = torch.mean(losses)
             else:
@@ -243,7 +246,7 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
     print('%s epoch %d avg loss: %.5f avg lploss: %.5f'
           % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['lp_loss'] / res['counter']))
     if rollout:
-        print(res['loss'],res['counter'])
+        
         return res['loss'] / res['counter'], res['avg_num_steps']
     else:
         return res['loss'] / res['counter']
