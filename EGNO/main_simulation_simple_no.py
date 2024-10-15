@@ -259,6 +259,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
     for i in range(traj_len):
 
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
+        print(torch.isnan(loc).any())
         loc_preds[i] = loc
         loc = loc.view(num_steps, -1, loc.shape[-1])[-1] #get last element in the inner trajectory
         vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory
@@ -271,7 +272,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc = loc.view(-1, loc.shape[-1])
     print(torch.isnan(loc_preds).any())
     loc_preds = loc_preds.reshape(traj_len*num_steps, -1, 3)
-    print(torch.isnan(loc_preds).any())
+    
     return loc_preds
 
 def pearson_correlation_batch(x, y, N):
