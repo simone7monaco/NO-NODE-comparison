@@ -231,7 +231,10 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
         if backprop:
             loss.backward()
             optimizer.step()
-        res['loss'] += losses[-1].item() * batch_size
+        if rollout:
+            res['loss'] += loss.item() * batch_size
+        else:
+            res['loss'] += losses[-1].item() * batch_size
         res['counter'] += batch_size
 
     if not backprop:
