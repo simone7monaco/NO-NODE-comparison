@@ -226,7 +226,6 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
         else:
             raise Exception("Wrong model")
         
-            
 
         if backprop:
             loss.backward()
@@ -244,6 +243,7 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
     print('%s epoch %d avg loss: %.5f avg lploss: %.5f'
           % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['lp_loss'] / res['counter']))
     if rollout:
+        print(res['loss'],res['counter'])
         return res['loss'] / res['counter'], res['avg_num_steps']
     else:
         return res['loss'] / res['counter']
