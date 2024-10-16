@@ -278,8 +278,6 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         print(torch.isnan(loc).any(), torch.isinf(loc).any())
         print("nodes \t")
         print(torch.isnan(nodes).any(), torch.isinf(nodes).any())
-        print("edges \t")
-        print(torch.isnan(edges).any(), torch.isinf(edges).any())
         print("edge attr \t")
         print(torch.isnan(edge_attr).any(), torch.isinf(edge_attr).any())
         print("loc mean \t")
