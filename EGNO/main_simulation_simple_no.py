@@ -259,10 +259,14 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
     for i in range(traj_len):
 
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
-        print(torch.isnan(loc).any())
+        print(torch.isnan(loc).any(), torch.isinf(loc).any())
         loc_preds[i] = loc
         loc = loc.view(num_steps, -1, loc.shape[-1])[-1] #get last element in the inner trajectory
         vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory
+        print("loc \t")
+        print(torch.isnan(loc).any(), torch.isinf(loc).any())
+        print("vel \t")
+        print(torch.isnan(vel).any(), torch.isinf(vel).any())
         nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
         rows, cols = edges
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
@@ -270,6 +274,18 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc = loc.view(-1, n_nodes, loc.shape[-1])
         loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))
         loc = loc.view(-1, loc.shape[-1])
+        print("loc \t")
+        print(torch.isnan(loc).any(), torch.isinf(loc).any())
+        print("nodes \t")
+        print(torch.isnan(nodes).any(), torch.isinf(nodes).any())
+        print("edges \t")
+        print(torch.isnan(edges).any(), torch.isinf(edges).any())
+        print("edge attr \t")
+        print(torch.isnan(edge_attr).any(), torch.isinf(edge_attr).any())
+        print("loc mean \t")
+        print(torch.isnan(loc_mean).any(), torch.isinf(loc_mean).any())
+    
+    print("\n outside loop \n")
     print(torch.isnan(loc_preds).any())
     loc_preds = loc_preds.reshape(traj_len*num_steps, -1, 3)
     
