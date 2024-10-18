@@ -58,7 +58,7 @@ def train(gpu, args):
     # with open(args.outf + "/" + args.exp_name + "/results.json", "w") as outfile:
     #         outfile.write(json_object)
 
-    traj_losses = np.array(best['losses'])
+    traj_losses = np.array(best['losses'].cpu())
     np.save('traj_losses.npy', traj_losses)
 
     return best_val_loss, best_test_loss, best_epoch
