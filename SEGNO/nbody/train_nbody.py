@@ -58,8 +58,8 @@ def train(gpu, args):
     # with open(args.outf + "/" + args.exp_name + "/results.json", "w") as outfile:
     #         outfile.write(json_object)
 
-    traj_losses = np.array(best['losses'].cpu())
-    np.save('traj_losses.npy', traj_losses)
+    traj_losses = torch.Tensor(best['losses'])
+    torch.save(traj_losses,'traj_losses.pt',)
 
     return best_val_loss, best_test_loss, best_epoch
 
