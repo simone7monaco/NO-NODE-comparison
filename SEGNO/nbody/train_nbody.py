@@ -53,10 +53,11 @@ def train(gpu, args):
             print("*** Best Val Loss: %.5f \t Best Test Loss: %.5f \t Best Test avg num steps: %.4f \t Best epoch %d" %
                   (best_val_loss, best_test_loss, best["avg_num_steps"], best_epoch))
             # print(best['long_loss'])
-
-    # json_object = json.dumps(best, indent=4)
-    # with open(args.outf + "/" + args.exp_name + "/results.json", "w") as outfile:
-    #         outfile.write(json_object)
+    
+    best = {k: v for k, v in best.items() if k != 'losses'}
+    json_object = json.dumps(best, indent=4)
+    with open(args.outf + "/" + args.exp_name + "/results.json", "w") as outfile:
+        outfile.write(json_object)
 
     traj_losses = torch.stack(best['losses'], dim=0)
     torch.save(traj_losses,'traj_losses.pt',)
