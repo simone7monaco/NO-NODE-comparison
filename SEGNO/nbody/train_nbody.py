@@ -4,7 +4,7 @@ from torch import nn, optim
 from models.model import SEGNO
 from torch_geometric.nn import knn_graph
 from nbody.dataset_nbody import NBodyDataset
-
+import json
 time_exp_dic = {'time': 0, 'counter': 0}
 
 torch.manual_seed(40)
@@ -54,6 +54,13 @@ def train(gpu, args):
                   (best_val_loss, best_test_loss, best["avg_num_steps"], best_epoch))
             # print(best['long_loss'])
 
+    json_object = json.dumps(best, indent=4)
+    with open(args.outf + "/" + args.exp_name + "/results.json", "w") as outfile:
+            outfile.write(json_object)
+
+    traj_losses = np.array(best['losses'])
+    np.save('traj_losses.npy', traj_losses)
+
     return best_val_loss, best_test_loss, best_epoch
 
 
@@ -63,7 +70,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
     else:
         model.eval()
 
-    res = {'epoch': epoch, 'loss': 0, "tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'long_loss': {}}
+    res = {'epoch': epoch, 'loss': 0, 'losses': [], "tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'long_loss': {}}
     criterion, loss_mse_no_red = criterion[0], criterion[1]
     n_nodes = 5
     batch_size = args.batch_size
@@ -109,6 +116,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             losses = loss_mse_no_red(locs_pred, locs_true).view(traj_len, batch_size * n_nodes, 3)
             losses = torch.mean(losses, dim=(1, 2))
             loss = torch.mean(losses)
+            res['losses'].append(losses)
         else:
             loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
             loss = criterion(loc_pred, loc_end)
