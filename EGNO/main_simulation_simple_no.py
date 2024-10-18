@@ -179,7 +179,7 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
         model.eval()
 
     res = {'epoch': epoch, 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
-
+    preds = []
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_true = data
@@ -208,8 +208,10 @@ def train(model, optimizer, epoch, loader, backprop=True, rollout=False):
                 locs_true = loc_true.view(args.num_timesteps*traj_len, batch_size * n_nodes, 3)
                 
                 locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len).to(device)
+                
                 corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
                 print(torch.isnan(locs_pred).any())
+                torch.save(locs_pred,'locs_pred.pt')
                 locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
                 locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
                 
@@ -257,9 +259,11 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
     loc_preds = torch.zeros((traj_len,loc.shape[0]*num_steps,loc.shape[1]))
     vel = v
     for i in range(traj_len):
-
+        print("Inside loop \n")
+        print(loc.shape,loc)
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
         print(torch.isnan(loc).any(), torch.isinf(loc).any())
+        print(loc.shape,loc)
         loc_preds[i] = loc
         loc = loc.view(num_steps, -1, loc.shape[-1])[-1] #get last element in the inner trajectory
         vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory

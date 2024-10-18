@@ -60,7 +60,7 @@ def train(gpu, args):
         outfile.write(json_object)
 
     traj_losses = torch.stack(best['losses'], dim=0)
-    torch.save(traj_losses,'traj_losses.pt',)
+    torch.save(traj_losses,'traj_losses.pt')
 
     return best_val_loss, best_test_loss, best_epoch
 
