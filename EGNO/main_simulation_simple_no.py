@@ -264,7 +264,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
         print(torch.isnan(loc).any(), torch.isinf(loc).any())
         print(loc.shape,loc)
-        loc_preds[i] = loc
+        loc_preds[i] = loc.clone()
         loc = loc.view(num_steps, -1, loc.shape[-1])[-1] #get last element in the inner trajectory
         vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory
         print("loc \t")
