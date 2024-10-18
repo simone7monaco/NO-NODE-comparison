@@ -54,9 +54,9 @@ def train(gpu, args):
                   (best_val_loss, best_test_loss, best["avg_num_steps"], best_epoch))
             # print(best['long_loss'])
 
-    json_object = json.dumps(best, indent=4)
-    with open(args.outf + "/" + args.exp_name + "/results.json", "w") as outfile:
-            outfile.write(json_object)
+    # json_object = json.dumps(best, indent=4)
+    # with open(args.outf + "/" + args.exp_name + "/results.json", "w") as outfile:
+    #         outfile.write(json_object)
 
     traj_losses = np.array(best['losses'])
     np.save('traj_losses.npy', traj_losses)
