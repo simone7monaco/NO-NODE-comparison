@@ -60,7 +60,7 @@ def train(gpu, args):
             # print(best['long_loss'])
     
     json_object = json.dumps(results, indent=4)
-    with open("exp1/results.json", "w") as outfile:
+    with open("results.json", "w") as outfile:
         outfile.write(json_object)
 
     traj_losses = torch.stack(best['losses'], dim=0)
