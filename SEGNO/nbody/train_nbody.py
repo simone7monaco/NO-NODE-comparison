@@ -17,7 +17,7 @@ def train(gpu, args):
         device = torch.device('cuda:' + str(gpu))
 
     model = SEGNO(in_node_nf=1, in_edge_nf=1, hidden_nf=64, device=device, n_layers=args.layers,
-                         recurrent=True, norm_diff=False, tanh=False)
+                         recurrent=True, norm_diff=False, tanh=False, use_previous_state=True)
 
     dataset_train = NBodyDataset(partition='train', dataset_name=args.nbody_name,
                                  max_samples=args.max_samples)
@@ -32,18 +32,23 @@ def train(gpu, args):
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     loss_mse = nn.MSELoss()
     loss_mse_no_red = nn.MSELoss(reduction='none')
+    results = {'eval epoch': [], 'val loss': [], 'test loss': [], 'train loss': []}
     best_val_loss = 1e8
     best_test_loss = 1e8
     best_epoch = 0
     best = {'long_loss': {}}
     for epoch in range(0, args.epochs):
         train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args)
-
+        results['train loss'].append(train_loss)
         if epoch % args.test_interval == 0 or epoch == args.epochs-1:
 
             val_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_val, device, args, backprop=False)
             test_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_test,
                                   device, args, backprop=False,rollout=True)
+            
+            results['eval epoch'].append(epoch)
+            results['val loss'].append(val_loss)
+            results['test loss'].append(test_loss)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -54,8 +59,7 @@ def train(gpu, args):
                   (best_val_loss, best_test_loss, best["avg_num_steps"], best_epoch))
             # print(best['long_loss'])
     
-    best = {k: v for k, v in best.items() if k != 'losses'}
-    json_object = json.dumps(best, indent=4)
+    json_object = json.dumps(results, indent=4)
     with open(args.outf + "/" + args.exp_name + "/results.json", "w") as outfile:
         outfile.write(json_object)
 
@@ -65,7 +69,7 @@ def train(gpu, args):
     return best_val_loss, best_test_loss, best_epoch
 
 
-def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop=True,rollout=False):
+def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop=True,rollout=False,use_previous_state=False):
     if backprop:
         model.train()
     else:
@@ -119,8 +123,29 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             loss = torch.mean(losses)
             res['losses'].append(losses)
         else:
-            loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
-            loss = criterion(loc_pred, loc_end)
+            if use_previous_state:
+                x, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+                prev_x = x
+                pred_x = x
+                #call model again with new observed values and prev_x
+                loc, vel = locs[35], vels[35] #take sample corresponding to half the delta t (just a try)
+                #loc_end = torch.cat(loc,loc_end)
+                batch = torch.arange(0, batch_size)
+                batch = batch.repeat_interleave(n_nodes).long().to(device)
+                
+                edge_index = knn_graph(loc, 4, batch)
+                h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+                rows, cols = edge_index
+                loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
+                edge_attr = loc_dist.detach()
+
+                loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev_x)
+                #loc_pred = torch.cat(pred_x, loc_pred)
+                loss = criterion(loc_pred, loc_end) #maybe consider intermediate steps for loss computation
+
+            else:
+                loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+                loss = criterion(loc_pred, loc_end)
 
         res['loss'] += loss.item()*batch_size
 

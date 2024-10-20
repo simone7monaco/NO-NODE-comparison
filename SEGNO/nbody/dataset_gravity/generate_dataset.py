@@ -84,6 +84,13 @@ def generate_dataset(num_sims, length, sample_freq):
 
 if __name__ == "__main__":
 
+    # vel = np.load("vel_train_charged5_initvel1small.npy")
+    # edges = np.load("edges_train_charged5_initvel1small.npy")
+    # loc = np.load("loc_train_charged5_initvel1small.npy")
+    # charges = np.load("charges_train_charged5_initvel1small.npy")
+    # print(vel.shape,edges.shape,loc.shape,charges.shape)
+    # exit()
+
     print("Generating {} training simulations".format(args.num_train))
     loc_train, vel_train, edges_train, charges_train = generate_dataset(args.num_train,
                                                                         args.length,
