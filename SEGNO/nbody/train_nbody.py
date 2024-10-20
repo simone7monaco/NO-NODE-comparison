@@ -37,6 +37,7 @@ def train(gpu, args):
     best_test_loss = 1e8
     best_epoch = 0
     best = {'long_loss': {}}
+    print(args.use_previous_state)
     for epoch in range(0, args.epochs):
         train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args, use_previous_state=args.use_previous_state)
         results['train loss'].append(train_loss)
