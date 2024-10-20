@@ -17,7 +17,7 @@ def train(gpu, args):
         device = torch.device('cuda:' + str(gpu))
 
     model = SEGNO(in_node_nf=1, in_edge_nf=1, hidden_nf=64, device=device, n_layers=args.layers,
-                         recurrent=True, norm_diff=False, tanh=False, use_previous_state=True)
+                         recurrent=True, norm_diff=False, tanh=False, use_previous_state=args.use_previous_state)
 
     dataset_train = NBodyDataset(partition='train', dataset_name=args.nbody_name,
                                  max_samples=args.max_samples)
@@ -38,11 +38,11 @@ def train(gpu, args):
     best_epoch = 0
     best = {'long_loss': {}}
     for epoch in range(0, args.epochs):
-        train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args)
+        train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args, use_previous_state=args.use_previous_state)
         results['train loss'].append(train_loss)
         if epoch % args.test_interval == 0 or epoch == args.epochs-1:
 
-            val_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_val, device, args, backprop=False)
+            val_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_val, device, args, backprop=False,use_previous_state=args.use_previous_state)
             test_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_test,
                                   device, args, backprop=False,rollout=True)
             

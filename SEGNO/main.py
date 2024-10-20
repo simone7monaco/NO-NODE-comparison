@@ -47,6 +47,8 @@ if __name__ == "__main__":
                         help='Download flag')
 
     # Nbody parameters:
+    parser.add_argument('--use_previous_state', type=bool, default=False,
+                        help='If use prev state')
     parser.add_argument('--nbody_name', type=str, default="nbody_small",
                         help='Name of nbody data [nbody, nbody_small]')
     parser.add_argument('--max_samples', type=int, default=3000,
@@ -55,6 +57,7 @@ if __name__ == "__main__":
                         help='Flag for timing experiment')
     parser.add_argument('--test_interval', type=int, default=5,
                         help='Test every test_interval epochs')
+    
 
     # Gravity parameters:
     parser.add_argument('--neighbours', type=int, default=6,
