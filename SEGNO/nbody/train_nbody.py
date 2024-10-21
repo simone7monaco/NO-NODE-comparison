@@ -172,17 +172,17 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
 
 def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, num_prev=0):
 
-    loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
+    
     vel = v
     prev = None
     prevs = 0
     loc = loc_list[0]
-
+    loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
     loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
     
     for i in range(traj_len):
         
-        if num_prev is not 0 and i < num_prev:
+        if num_prev != 0 and i < num_prev:
             prev = loc   #predicted
             prevs +=1
             loc_preds[i] = loc
