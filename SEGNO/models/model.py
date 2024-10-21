@@ -42,7 +42,7 @@ class SEGNO(nn.Module):
 
         if self.use_previous_state and prev_x is not None: 
             x = x + prev_x         #to combine informations from previously predicted current state (prev_x) and observed current state (x)
-
+                                    #change aggregation method
         for i in range(1, self.n_layers):
             his, x, v, _ = self.module(h, edges, x, v, vel, edge_attr=edge_attr)
             h = h + his

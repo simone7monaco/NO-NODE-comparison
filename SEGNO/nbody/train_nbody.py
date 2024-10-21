@@ -112,7 +112,11 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         if rollout:
             locs_true = locs[40:130:10].to(device)
             traj_len = locs_true.shape[0]
-            locs_pred = rollout_fn(model,h, loc, edge_index, vel, edge_attr, batch, traj_len).to(device)
+            num_prev = 1
+            loc_list = []
+            for i in range(num_prev):
+                loc_list.append(locs[i*10+30]) #start from 30
+            locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=num_prev).to(device)
 
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
@@ -166,19 +170,42 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
     return res['loss'] / res['counter'], res
 
 
-def rollout_fn(model, h, loc, edge_index, v, edge_attr, batch, traj_len):
+def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, num_prev=0):
 
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
     vel = v
-    for i in range(traj_len):
+    prev = None
+    prevs = 0
+    loc = loc_list[0]
 
-        loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
-        loc_preds[i] = loc
-        edge_index = knn_graph(loc, 4, batch)
-        h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
-        rows, cols = edge_index
-        loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
-        edge_attr = loc_dist.detach()
+    loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+    
+    for i in range(traj_len):
+        
+        if num_prev is not 0 and i < num_prev:
+            prev = loc   #predicted
+            prevs +=1
+            loc_preds[i] = loc
+            if len(loc_preds) == traj_len:
+                break
+            loc = loc_list[prevs] #observed
+            edge_index = knn_graph(loc, 4, batch)
+            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+            rows, cols = edge_index
+            loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
+            edge_attr = loc_dist.detach()
+            loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev)
+        else:
+            loc_preds[i] = loc
+            if len(loc_preds) == traj_len:
+                break
+            edge_index = knn_graph(loc, 4, batch)
+            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+            rows, cols = edge_index
+            loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
+            edge_attr = loc_dist.detach()
+            loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+
     
     return loc_preds
 
