@@ -241,11 +241,11 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 locs_pred = locs_pred[:20]
                 locs_true = locs_true[:20]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
-                locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
-                locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
+                #locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
+                #locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
                 
                 res["tot_num_steps"] += avg_num_steps*batch_size
-                res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
+                
                 #loss with metric (A-MSE)
                 losses = loss_mse(locs_pred, locs_true).view(20, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
                 print(losses.shape)
@@ -265,6 +265,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 losses = loss_mse(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
                 losses = torch.mean(losses, dim=(1, 2))
                 loss = torch.mean(losses)
+                print(loss.item())
         else:
             raise Exception("Wrong model")
         
@@ -277,7 +278,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         else:
             res['loss'] += losses[-1].item() * batch_size
         res['counter'] += batch_size
-
+        res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
     if not backprop:
         prefix = "==> "
     else:
@@ -352,8 +353,8 @@ def pearson_correlation_batch(x, y, N):
     
     T = x.shape[0]
     B = x.size(1) // N
-    x = x.reshape( T, B, -1).transpose(0,1)  # Flatten N and 3 into a single dimension
-    y = y.reshape( T, B, -1).transpose(0,1)
+    x = x.reshape( T, B, -1)[:25].transpose(0,1)  # Flatten N and 3 into a single dimension
+    y = y.reshape( T, B, -1)[:25].transpose(0,1)
     print(x.shape)
     
     # Mean subtraction
