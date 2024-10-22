@@ -100,10 +100,11 @@ class NBodyDataset():
 
 
 class NBodyDynamicsDataset(NBodyDataset):
-    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", num_timesteps=1, rollout=False, traj_len=1):
+    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", num_timesteps=1, num_inputs=1, rollout=False, traj_len=1):
         self.num_timesteps = num_timesteps
         self.rollout = rollout
         self.traj_len = traj_len
+        self.num_inputs = num_inputs
         super(NBodyDynamicsDataset, self).__init__(partition, data_dir, max_samples, dataset_name)
 
     def __getitem__(self, i):
@@ -163,6 +164,15 @@ class NBodyDynamicsDataset(NBodyDataset):
             else:
                 vels = [vel[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
             vels = np.stack(vels, axis=1)
+
+        if self.num_inputs > 1:
+            
+            idxs = torch.linspace(0, self.num_timesteps, self.num_inputs, dtype=int)
+            loc_inputs = loc[frame_0 + idxs]
+            vel_inputs = vel[frame_0 + idxs]
+            
+            return loc_inputs, vel_inputs, edge_attr, charges, locs
+
 
         return loc[frame_0], vel[frame_0], edge_attr, charges, locs
 
