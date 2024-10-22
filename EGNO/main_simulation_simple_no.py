@@ -182,13 +182,14 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
 
     res = {'epoch': epoch, 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
     preds = []
+
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_true = data
+        
         n_nodes = 5
         
-        
-
+    
         optimizer.zero_grad()
 
         if args.model == 'egno':
@@ -227,25 +228,26 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 edge_attr = torch.cat([edge_attr_o, loc_dist], 1).detach()  # concatenate all edge properties
             
             
-
             if rollout:
                 traj_len = 10
-                locs_true = loc_true.view(args.num_timesteps*traj_len, batch_size * n_nodes, 3)
                 
+                
+                locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
+                print(locs_true.shape)
                 locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len).to(device)
                 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
                 print(first_invalid_idx)
                 locs_pred = locs_pred[:20]
                 locs_true = locs_true[:20]
-                print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
+                #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
                 locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
                 locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
                 
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
                 #loss with metric (A-MSE)
-                losses = loss_mse(locs_pred, locs_true).view(20, batch_size * n_nodes, 3)
+                losses = loss_mse(locs_pred, locs_true).view(20, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
                 print(losses.shape)
                 #print(torch.max(losses))
                 print(torch.isnan(losses).any(), torch.isinf(losses).any())
@@ -253,12 +255,13 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 print(losses,torch.max(losses))
                 
                 print(torch.isnan(losses).any(), torch.isinf(losses).any())
-                loss = torch.mean(losses)
+                loss = torch.mean(losses) #losses[-1]#
                 print(loss.item())
+                
             else:
                 loc_end = loc_true.view(batch_size * n_nodes, args.num_timesteps, 3).transpose(0, 1).contiguous().view(-1, 3)
                 loc_pred, vel_pred, _ = model(loc, nodes, edges, edge_attr, v=vel, loc_mean=loc_mean)
-               
+                #pearson_correlation_batch(loc_pred.reshape(args.num_timesteps,batch_size * n_nodes, 3),loc_end,n_nodes)
                 losses = loss_mse(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
                 losses = torch.mean(losses, dim=(1, 2))
                 loss = torch.mean(losses)
@@ -289,18 +292,23 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
 
 def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len):
     num_steps=10
-    loc_preds = torch.zeros((traj_len,loc.shape[0]*num_steps,loc.shape[1]))
+    loc_preds = torch.zeros((traj_len,loc.shape[0]*num_steps,loc.shape[-1]))
     vel = v
     for i in range(traj_len):
         #print("Inside loop \n")
         #print(loc.shape,loc)
         loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
         #print(torch.isnan(loc).any(), torch.isinf(loc).any())
-        # print("loc")
+        #print("loc")
+        #print(loc.shape)
         # print(loc.shape)
-        loc_preds[i] = loc.clone()
-        loc = loc.view(num_steps, -1, loc.shape[-1])[-1] #get last element in the inner trajectory
+        loc_preds[i] = loc
+        #print(torch.sum(loc[-1]))
+        loc = loc.view(num_steps,-1, loc.shape[-1])[-1]#.transpose(0,1)[-1] #get last element in the inner trajectory
         vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory
+        #print(loc.shape)
+        #print(torch.sum(loc))
+        #exit()
         # print("loc \t")
         # print(torch.isnan(loc).any(), torch.isinf(loc).any())
         # print("vel \t")
@@ -341,13 +349,7 @@ def pearson_correlation_batch(x, y, N):
     """
     
     # Reshape to (B, T, N*3) 
-    print(torch.isnan(x[:10]).any(), torch.isinf(x[:10]).any())
-    print(torch.isnan(x[:20]).any(), torch.isinf(x[:20]).any())
-    print(torch.isnan(x[:25]).any(), torch.isinf(x[:25]).any())
-    print(torch.isnan(x[:30]).any(), torch.isinf(x[:30]).any())
-    print(torch.isnan(x[:50]).any(), torch.isinf(x[:50]).any())
-    x = x[:30]
-    y = y[:30]
+    
     T = x.shape[0]
     B = x.size(1) // N
     x = x.reshape( T, B, -1).transpose(0,1)  # Flatten N and 3 into a single dimension
@@ -395,13 +397,15 @@ def pearson_correlation_batch(x, y, N):
     # If no failures, return the number of columns as the "end"
     if mask.all():
         first_failure_index = correlation.size(1)       
-
+    print("first invalid")
     print(first_failure_index,torch.mean(torch.Tensor(num_steps_batch)))
-    exit()
+    #exit()
     #return the average (in the batch) number of steps before reaching a value of correlation lower than 0.5
     #return the minimum first index along T dimension after which correlation drops below the threshold                                 
     return correlation, torch.mean(torch.Tensor(num_steps_batch)), first_failure_index 
 
+
+    
 
 if __name__ == "__main__":
     best_train_loss, best_val_loss, best_test_loss, best_epoch = main()

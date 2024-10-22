@@ -119,9 +119,9 @@ class NBodyDynamicsDataset(NBodyDataset):
             frame_0, frame_T = 20, 30
         else:
             raise Exception("Wrong dataset partition %s" % self.dataset_name)
-
+        
         if self.rollout:
-
+            
             delta_frame = frame_T - frame_0
             for i in range(self.traj_len):
                 last = False
@@ -130,7 +130,9 @@ class NBodyDynamicsDataset(NBodyDataset):
                     locs = [loc[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
                 else:
                     locs = [loc[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+                
                 locs = np.stack(locs, axis=1) 
+                
                 if i == 0: # first iter
                     locs_m = locs
                 else:
@@ -150,6 +152,7 @@ class NBodyDynamicsDataset(NBodyDataset):
                 
             frame_0 = 30
             locs = locs_m
+            
 
         else:
             delta_frame = frame_T - frame_0
@@ -173,7 +176,7 @@ class NBodyDynamicsDataset(NBodyDataset):
             
             return loc_inputs, vel_inputs, edge_attr, charges, locs
 
-
+        
         return loc[frame_0], vel[frame_0], edge_attr, charges, locs
 
 
