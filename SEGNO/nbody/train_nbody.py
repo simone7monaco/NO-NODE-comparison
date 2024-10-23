@@ -108,9 +108,9 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         rows, cols = edge_index
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
         edge_attr = loc_dist.detach()
-        exit()
+        
         if rollout:
-            locs_true = locs[40:130:10].to(device)
+            locs_true = locs[40:140:10].to(device)
             traj_len = locs_true.shape[0]
             num_prev = 1
             loc_list = []
@@ -224,8 +224,8 @@ def pearson_correlation_batch(x, y, N):
     # Reshape to (B, T, N*3) 
     T = x.shape[0]
     B = x.size(1) // N
-    x = x.reshape( B, T, -1)  # Flatten N and 3 into a single dimension
-    y = y.reshape( B, T, -1)
+    x = x.reshape( T, B, -1).transpose(0,1)  # Flatten N and 3 into a single dimension
+    y = y.reshape( T, B, -1).transpose(0,1)
 
     # Mean subtraction
     mean_x = x.mean(dim=2, keepdim=True)
@@ -243,7 +243,8 @@ def pearson_correlation_batch(x, y, N):
 
     # Compute Pearson correlation for each sample in the batch
     correlation = covariance / (std_x * std_y)
-
+    print(correlation.shape,correlation[0])
+    exit()
     #number of steps before reaching a value of correlation, between prediction and ground truth for each timesteps, lower than 0.5
     num_steps_batch = []
 
