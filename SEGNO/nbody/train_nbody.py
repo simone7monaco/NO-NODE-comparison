@@ -116,11 +116,11 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             loc_list = []
             for i in range(num_prev):
                 loc_list.append(locs[i*10+30]) #start from 30
-            locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=num_prev).to(device)
+            locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=0).to(device)
 
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
-            res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
+            
 
             #loss with metric (A-MSE)
             losses = loss_mse_no_red(locs_pred, locs_true).view(traj_len, batch_size * n_nodes, 3)
@@ -160,13 +160,14 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             optimizer.step()
             res['counter'] += batch_size
         res['counter'] += batch_size
-
+    if rollout:
+        res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
     if not backprop:
         prefix = "==> "
     else:
         prefix = ""
     print('%s epoch %d avg loss: %.5f avg num steps %.4f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['avg_num_steps']))
-
+    
     return res['loss'] / res['counter'], res
 
 
@@ -242,7 +243,7 @@ def pearson_correlation_batch(x, y, N):
     # Compute Pearson correlation for each sample in the batch
     correlation = covariance / (std_x * std_y)
     print(correlation.shape,correlation[0])
-    exit()
+    
     #number of steps before reaching a value of correlation, between prediction and ground truth for each timesteps, lower than 0.5
     num_steps_batch = []
 
