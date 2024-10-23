@@ -186,8 +186,7 @@ def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, nu
             prev = loc   #predicted
             prevs +=1
             loc_preds[i] = loc
-            if len(loc_preds) == traj_len:
-                break
+            
             loc = loc_list[prevs] #observed
             edge_index = knn_graph(loc, 4, batch)
             h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
@@ -197,8 +196,7 @@ def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, nu
             loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev)
         else:
             loc_preds[i] = loc
-            if len(loc_preds) == traj_len:
-                break
+            
             edge_index = knn_graph(loc, 4, batch)
             h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
             rows, cols = edge_index
