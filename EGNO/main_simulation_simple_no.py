@@ -11,6 +11,7 @@ import json
 
 import random
 import numpy as np
+import wandb
 
 parser = argparse.ArgumentParser(description='EGNO')
 parser.add_argument('--exp_name', type=str, default='exp_1', metavar='N', help='experiment_name')
@@ -86,6 +87,10 @@ if args.config_by_file is not None:
         args = Namespace(**args)
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
+
+wandb.login()
+
+wandb.init( project="EGNO-NO-NODE-comparison")# set the wandb project where this run will be logged
 
 
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -171,6 +176,8 @@ def main():
         json_object = json.dumps(results, indent=4)
         with open(args.outf + "/" + args.exp_name + "/loss.json", "w") as outfile:
             outfile.write(json_object)
+
+        
     return best_train_loss, best_val_loss, best_test_loss, best_epoch
 
 
@@ -182,7 +189,8 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
 
     res = {'epoch': epoch, 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
     preds = []
-
+    #print(f"this is the {loader.dataset.partition} partition")
+    
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_true = data
@@ -231,9 +239,8 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
             if rollout:
                 traj_len = 10
                 
-                
                 locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
-                print(locs_true.shape)
+                #print(locs_true.shape)
                 locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len).to(device)
                 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
@@ -248,15 +255,14 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 
                 #loss with metric (A-MSE)
                 losses = loss_mse(locs_pred, locs_true).view(20, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
-                print(losses.shape)
+                #print(losses.shape)
                 #print(torch.max(losses))
-                print(torch.isnan(losses).any(), torch.isinf(losses).any())
+                #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
-                print(losses,torch.max(losses))
+                #print(losses,torch.max(losses))
                 
-                print(torch.isnan(losses).any(), torch.isinf(losses).any())
-                loss = torch.mean(losses) #losses[-1]#
-                print(loss.item())
+                #print(torch.isnan(losses).any(), torch.isinf(losses).any())
+                loss = torch.mean(losses) 
                 
             else:
                 loc_end = loc_true.view(batch_size * n_nodes, args.num_timesteps, 3).transpose(0, 1).contiguous().view(-1, 3)
@@ -265,7 +271,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 losses = loss_mse(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
                 losses = torch.mean(losses, dim=(1, 2))
                 loss = torch.mean(losses)
-                print(loss.item())
+                
         else:
             raise Exception("Wrong model")
         
@@ -285,7 +291,12 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         prefix = ""
     print('%s epoch %d avg loss: %.5f avg lploss: %.5f'
           % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['lp_loss'] / res['counter']))
+    
+    avg_loss = res['loss'] / res['counter']
+    wandb.log({f"{loader.dataset.partition}_loss": avg_loss, "epoch": epoch+1})
+
     if rollout:
+        
         return res['loss'] / res['counter'], res['avg_num_steps']
     else:
         return res['loss'] / res['counter']
@@ -355,7 +366,7 @@ def pearson_correlation_batch(x, y, N):
     B = x.size(1) // N
     x = x.reshape( T, B, -1)[:25].transpose(0,1)  # Flatten N and 3 into a single dimension
     y = y.reshape( T, B, -1)[:25].transpose(0,1)
-    print(x.shape)
+    
     
     # Mean subtraction
     mean_x = x.mean(dim=2, keepdim=True)
@@ -386,9 +397,6 @@ def pearson_correlation_batch(x, y, N):
             num_steps_before = T
         num_steps_batch.append(num_steps_before)
 
-    print("Correlation")
-    print(correlation.shape)
-    print(correlation[0])
     # Check if all values along B dimension are >= 0.5 for each T
     mask = torch.all(correlation >= 0.5, dim=0)
 
@@ -417,3 +425,4 @@ if __name__ == "__main__":
     print("best_train = %.6f, best_val = %.6f, best_test = %.6f, best_epoch = %d"
           % (best_train_loss, best_val_loss, best_test_loss, best_epoch))
 
+    wandb.finish()
