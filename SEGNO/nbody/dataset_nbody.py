@@ -67,7 +67,8 @@ class NBodyDataset():
         #print(loc.shape)
         #loc = torch.transpose(loc, 1, 2)
         #vel = torch.transpose(vel, 1, 2)
-        #print(loc.shape)
+         
+        #loc shape: [519, 5, 3]
         return loc, vel, loc
 
     def __len__(self):

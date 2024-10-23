@@ -97,7 +97,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                 data[i] = data[i].view(-1, data[i].size(-1))  
                 
 
-        locs, vels, loc_ends = data
+        locs, vels, loc_ends = data   #locs shape: [519, 500, 3] (T,BN,3)
         loc, loc_end, vel = locs[30], locs[40], vels[30]
         
         batch = torch.arange(0, batch_size)
@@ -108,7 +108,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         rows, cols = edge_index
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
         edge_attr = loc_dist.detach()
-
+        exit()
         if rollout:
             locs_true = locs[40:130:10].to(device)
             traj_len = locs_true.shape[0]
