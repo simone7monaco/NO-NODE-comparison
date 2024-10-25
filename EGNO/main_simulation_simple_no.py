@@ -11,7 +11,7 @@ import json
 
 import random
 import numpy as np
-#import wandb
+import wandb
 
 parser = argparse.ArgumentParser(description='EGNO')
 parser.add_argument('--exp_name', type=str, default='exp_1', metavar='N', help='experiment_name')
@@ -61,6 +61,8 @@ parser.add_argument('--decoder_layer', type=int, default=1,
 parser.add_argument('--norm', action='store_true', default=False,
                     help='Use norm in EGNO')
 
+parser.add_argument('--only_test', type=bool, default=True,
+                    help='The number of inputs to give for each prediction step.')
 parser.add_argument('--num_inputs', type=int, default=1,
                     help='The number of inputs to give for each prediction step.')
 parser.add_argument('--num_timesteps', type=int, default=10,
@@ -88,23 +90,24 @@ if args.config_by_file is not None:
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-# wandb.login()
+wandb.login()
 
-# wandb.init( project="NO-NODE-comparison",
-#            config={
-#     "learning_rate": args.lr,
-#     "weight_decay": args.weight_decay,
-#     "hidden_dim": args.nf,
-#     "dropout": args.dropout,
-#     "batch_size": args.batch_size,
-#     "epochs": args.epochs,
-#     "model": args.model,
-#     "nlayers": args.n_layers,  
-#     "time_emb_dim": args.time_emb_dim,
-#     "num_modes": args.num_modes,  
-#     "num_timesteps": args.num_timesteps,
-#     "num_inputs": args.num_inputs
-#     })
+wandb.init( project="NO-NODE-comparison",
+           config={
+    "learning_rate": args.lr,
+    "weight_decay": args.weight_decay,
+    "hidden_dim": args.nf,
+    "dropout": args.dropout,
+    "batch_size": args.batch_size,
+    "epochs": args.epochs,
+    "model": args.model,
+    "nlayers": args.n_layers,  
+    "time_emb_dim": args.time_emb_dim,
+    "num_modes": args.num_modes,  
+    "num_timesteps": args.num_timesteps,
+    "num_inputs": args.num_inputs,
+    "only_test": args.only_test
+    })
 
 
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -323,10 +326,10 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
           % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['lp_loss'] / res['counter']))
     
     avg_loss = res['loss'] / res['counter']
-    #wandb.log({f"{loader.dataset.partition}_loss": avg_loss, "epoch": epoch+1})
+    wandb.log({f"{loader.dataset.partition}_loss": avg_loss, "epoch": epoch+1})
 
     if rollout:
-        
+        wandb.log({"avg_num_steps": res['avg_num_steps']})
         return res['loss'] / res['counter'], res['avg_num_steps']
     else:
         return res['loss'] / res['counter']
@@ -455,4 +458,4 @@ if __name__ == "__main__":
     print("best_train = %.6f, best_val = %.6f, best_test = %.6f, best_epoch = %d"
           % (best_train_loss, best_val_loss, best_test_loss, best_epoch))
 
-    #wandb.finish()
+    wandb.finish()
