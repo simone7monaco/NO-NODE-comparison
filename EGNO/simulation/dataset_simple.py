@@ -170,7 +170,7 @@ class NBodyDynamicsDataset(NBodyDataset):
 
         if self.num_inputs > 1:
             
-            idxs = torch.linspace(0, self.num_timesteps, self.num_inputs, dtype=int)
+            idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
             loc_inputs = loc[frame_0 + idxs]
             vel_inputs = vel[frame_0 + idxs]
             

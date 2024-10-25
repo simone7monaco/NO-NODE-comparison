@@ -11,7 +11,7 @@ import json
 
 import random
 import numpy as np
-import wandb
+#import wandb
 
 parser = argparse.ArgumentParser(description='EGNO')
 parser.add_argument('--exp_name', type=str, default='exp_1', metavar='N', help='experiment_name')
@@ -88,9 +88,23 @@ if args.config_by_file is not None:
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-wandb.login()
+# wandb.login()
 
-wandb.init( project="EGNO-NO-NODE-comparison")# set the wandb project where this run will be logged
+# wandb.init( project="NO-NODE-comparison",
+#            config={
+#     "learning_rate": args.lr,
+#     "weight_decay": args.weight_decay,
+#     "hidden_dim": args.nf,
+#     "dropout": args.dropout,
+#     "batch_size": args.batch_size,
+#     "epochs": args.epochs,
+#     "model": args.model,
+#     "nlayers": args.n_layers,  
+#     "time_emb_dim": args.time_emb_dim,
+#     "num_modes": args.num_modes,  
+#     "num_timesteps": args.num_timesteps,
+#     "num_inputs": args.num_inputs
+#     })
 
 
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -117,12 +131,12 @@ def main():
     torch.cuda.manual_seed(seed)
 
     dataset_train = SimulationDataset(partition='train', max_samples=args.max_training_samples,
-                                      data_dir=args.data_dir, num_timesteps=args.num_timesteps, num_inputs=args.num_inputs)
+                                      data_dir=args.data_dir, num_timesteps=args.num_timesteps) #, num_inputs=args.num_inputs
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
                                                num_workers=0)
 
     dataset_val = SimulationDataset(partition='val',
-                                    data_dir=args.data_dir, num_timesteps=args.num_timesteps, num_inputs=args.num_inputs)
+                                    data_dir=args.data_dir, num_timesteps=args.num_timesteps )#num_inputs=args.num_inputs
     loader_val = torch.utils.data.DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                              num_workers=0)
 
@@ -152,7 +166,7 @@ def main():
     for epoch in range(0, args.epochs):
         train_loss = train(model, optimizer, epoch, loader_train,args)
         results['train loss'].append(train_loss)
-        if epoch % args.test_interval == 0:
+        if (epoch +1) % args.test_interval == 0:
             val_loss = train(model, optimizer, epoch, loader_val,args, backprop=False)
             test_loss, avg_num_steps = train(model, optimizer, epoch, loader_test,args, backprop=False, rollout=True)
 
@@ -188,7 +202,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         model.eval()
 
     res = {'epoch': epoch, 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
-    preds = []
+    
     #print(f"this is the {loader.dataset.partition} partition")
     
     for batch_idx, data in enumerate(loader):
@@ -197,27 +211,43 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         
         n_nodes = 5
         
-    
         optimizer.zero_grad()
 
         if args.model == 'egno':
 
-            if args.num_inputs > 1:
+            if args.num_inputs > 1 and rollout:
+                loc = loc.transpose(0,1) #2,100,5,3
+                vel = vel.transpose(0,1)
+                
+                batch_size = args.batch_size 
+                edges = loader.dataset.get_edges(batch_size, n_nodes)
+                edges = [edges[0].to(device), edges[1].to(device)]
+                rows, cols = edges
+                
+                edge_attr_o = edge_attr.view(-1, edge_attr.shape[-1])
+
                 loc_inputs = []
                 vel_inputs = []
                 loc_mean = []
+                edge_attrs = []
+                nodes = []
+                
                 for i in range(args.num_inputs):
-                    loc_inputs.append(loc[i].view(-1, loc[i].shape[-1]))
-                    loc_mean.append(loc[i].mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc[i].size(2)))
-                    vel_inputs.append(vel[i].view(-1, vel.shape[-1]))
                     
-                batch_size = loc[0].shape[0] // n_nodes
-                edges = loader.dataset.get_edges(batch_size, n_nodes)
-                edges = [edges[0].to(device), edges[1].to(device)]
+                    loc_inputs.append(loc[i].reshape(-1, loc[i].shape[-1]))
+                    loc_mean.append(loc[i].mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).reshape(-1, loc[i].size(2)))
+                    vel_inputs.append(vel[i].reshape(-1, vel[i].shape[-1]))
+                    loc_dist = torch.sum((loc[i].reshape(-1, loc[i].shape[-1])[rows] - loc[i].reshape(-1, loc[i].shape[-1])[cols])**2, 1).unsqueeze(1)
+                    edge_attrs.append(torch.cat([edge_attr_o, loc_dist], 1).detach())
+                    nodes.append(torch.sqrt(torch.sum(vel[i].reshape(-1, vel[i].shape[-1]) ** 2, dim=1)).unsqueeze(1).detach())
 
-                rows, cols = edges
+                loc = torch.stack(loc_inputs)
+                vel = torch.stack(vel_inputs)
+                edge_attr = torch.stack(edge_attrs)
+                nodes = torch.stack(nodes)
+                loc_mean = torch.stack(loc_mean)
 
-                #do the same for nodes, loc dist edge attr (inside egno some are not needed to be repeated on more steps because are the same)
+                
             else:
             
                 loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))  # [BN, 3]
@@ -241,12 +271,12 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 
                 locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
                 #print(locs_true.shape)
-                locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len).to(device)
+                locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size).to(device)
                 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
                 print(first_invalid_idx)
-                locs_pred = locs_pred[:20]
-                locs_true = locs_true[:20]
+                locs_pred = locs_pred[:first_invalid_idx]
+                locs_true = locs_true[:first_invalid_idx]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
                 #locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
                 #locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
@@ -254,12 +284,12 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 
                 #loss with metric (A-MSE)
-                losses = loss_mse(locs_pred, locs_true).view(20, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
+                losses = loss_mse(locs_pred, locs_true).view(first_invalid_idx, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
                 #print(losses.shape)
                 #print(torch.max(losses))
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
-                #print(losses,torch.max(losses))
+                print(losses,torch.max(losses))
                 
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 loss = torch.mean(losses) 
@@ -293,7 +323,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
           % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['lp_loss'] / res['counter']))
     
     avg_loss = res['loss'] / res['counter']
-    wandb.log({f"{loader.dataset.partition}_loss": avg_loss, "epoch": epoch+1})
+    #wandb.log({f"{loader.dataset.partition}_loss": avg_loss, "epoch": epoch+1})
 
     if rollout:
         
@@ -302,9 +332,9 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         return res['loss'] / res['counter']
 
 
-def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len):
+def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size):
     num_steps=10
-    loc_preds = torch.zeros((traj_len,loc.shape[0]*num_steps,loc.shape[-1]))
+    loc_preds = torch.zeros((traj_len,batch_size*num_steps*n_nodes,3))
     vel = v
     for i in range(traj_len):
         #print("Inside loop \n")
@@ -425,4 +455,4 @@ if __name__ == "__main__":
     print("best_train = %.6f, best_val = %.6f, best_test = %.6f, best_epoch = %d"
           % (best_train_loss, best_val_loss, best_test_loss, best_epoch))
 
-    wandb.finish()
+    #wandb.finish()
