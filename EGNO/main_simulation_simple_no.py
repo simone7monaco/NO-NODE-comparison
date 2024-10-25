@@ -277,7 +277,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size).to(device)
                 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
-                print(first_invalid_idx)
+                #print(first_invalid_idx)
                 locs_pred = locs_pred[:first_invalid_idx]
                 locs_true = locs_true[:first_invalid_idx]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
@@ -292,7 +292,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 #print(torch.max(losses))
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
-                print(losses,torch.max(losses))
+                #print(losses,torch.max(losses))
                 
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 loss = torch.mean(losses) 
@@ -326,12 +326,13 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
           % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['lp_loss'] / res['counter']))
     
     avg_loss = res['loss'] / res['counter']
-    wandb.log({f"{loader.dataset.partition}_loss": avg_loss, "epoch": epoch+1})
+    
 
     if rollout:
-        wandb.log({"avg_num_steps": res['avg_num_steps']})
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']})
         return res['loss'] / res['counter'], res['avg_num_steps']
     else:
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss})
         return res['loss'] / res['counter']
 
 
@@ -439,8 +440,8 @@ def pearson_correlation_batch(x, y, N):
     # If no failures, return the number of columns as the "end"
     if mask.all():
         first_failure_index = correlation.size(1)       
-    print("first invalid")
-    print(first_failure_index,torch.mean(torch.Tensor(num_steps_batch)))
+    #print("first invalid")
+    #print(first_failure_index,torch.mean(torch.Tensor(num_steps_batch)))
     #exit()
     #return the average (in the batch) number of steps before reaching a value of correlation lower than 0.5
     #return the minimum first index along T dimension after which correlation drops below the threshold                                 
