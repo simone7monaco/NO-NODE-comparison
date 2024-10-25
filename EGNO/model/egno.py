@@ -1,5 +1,6 @@
 from model.basic import EGNN
 from model.layer_no import TimeConv, get_timestep_embedding, TimeConv_x
+from utils import pad_tensor_to_length_3d
 import torch.nn as nn
 import torch
 
@@ -50,7 +51,8 @@ class EGNO(EGNN):
                     htot = hi
                 else:
                     htot = torch.cat([htot, hi])
-            h = htot
+             
+            h = pad_tensor_to_length_3d(htot,self.num_timesteps)
         else:
             h = h.unsqueeze(0).repeat(T, 1, 1)  # [T, BN, H]
 
@@ -79,10 +81,10 @@ class EGNO(EGNN):
                     loc_tot = torch.cat([loc_tot, loci])
                     edge_fea_tot = torch.cat([edge_fea_tot, edge_fea_i])
                     
-            x = x_tot
-            v = v_tot
-            loc_mean = loc_tot
-            edge_fea = edge_fea_tot
+            x = pad_tensor_to_length_3d(x_tot,self.num_timesteps)
+            v = pad_tensor_to_length_3d(v_tot,self.num_timesteps)
+            loc_mean = pad_tensor_to_length_3d(loc_tot,self.num_timesteps)
+            edge_fea = pad_tensor_to_length_3d(edge_fea_tot,self.num_timesteps)
             edges_0 = edge_index[0].repeat(T) + cumsum_edges
             edges_1 = edge_index[1].repeat(T) + cumsum_edges
             edge_index = [edges_0, edges_1]

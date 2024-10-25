@@ -91,6 +91,25 @@ def _padding_3(tensor_list, max_size):
     res = torch.cat(res, dim=0)
     return res
 
+def pad_tensor_to_length_3d(tensor, target_length=10):
+    # Check if the first dimension length is already target_length or greater
+    if tensor.size(0) >= target_length:
+        return tensor[:target_length]  # Truncate if longer than target length
+    
+    # Calculate the padding size
+    padding_size = target_length - tensor.size(0)
+    
+    # Get the last element along the first dimension (shape [1, H, W])
+    last_element = tensor[-1].unsqueeze(0)
+    
+    # Repeat the last element along the first dimension to match the padding size
+    padding = last_element.repeat(padding_size, 1, 1)
+    
+    # Concatenate the original tensor with the padding along the first dimension
+    padded_tensor = torch.cat((tensor, padding), dim=0)
+    
+    return padded_tensor
+
 
 def _pack_edges(edge_list, n_node):
     for idx, edge in enumerate(edge_list):
@@ -208,7 +227,7 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.val_loss_min = np.Inf
+        self.val_loss_min = np.inF
         self.delta = delta
         self.path = path
         self.trace_func = trace_func

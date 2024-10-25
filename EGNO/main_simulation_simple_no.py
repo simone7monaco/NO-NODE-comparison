@@ -13,6 +13,8 @@ import random
 import numpy as np
 import wandb
 
+
+
 parser = argparse.ArgumentParser(description='EGNO')
 parser.add_argument('--exp_name', type=str, default='exp_1', metavar='N', help='experiment_name')
 parser.add_argument('--batch_size', type=int, default=100, metavar='N',
@@ -278,8 +280,8 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
                 #print(first_invalid_idx)
-                locs_pred = locs_pred[:first_invalid_idx]
-                locs_true = locs_true[:first_invalid_idx]
+                locs_pred = locs_pred[:25]
+                locs_true = locs_true[:25]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
                 #locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
                 #locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
@@ -287,7 +289,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 
                 #loss with metric (A-MSE)
-                losses = loss_mse(locs_pred, locs_true).view(first_invalid_idx, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
+                losses = loss_mse(locs_pred, locs_true).view(25, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
                 #print(losses.shape)
                 #print(torch.max(losses))
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
