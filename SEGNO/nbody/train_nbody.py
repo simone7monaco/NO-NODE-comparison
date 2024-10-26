@@ -131,7 +131,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             loss = torch.mean(losses)
             res['losses'].append(losses)
         else:
-            if args.use_previous_state:
+            if args.use_previous_state and not args.only_test:
                 x, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
                 prev_x = x
                 pred_x = x
@@ -246,7 +246,7 @@ def pearson_correlation_batch(x, y, N):
 
     # Compute Pearson correlation for each sample in the batch
     correlation = covariance / (std_x * std_y)
-    print(correlation.shape,correlation[0])
+    
     
     #number of steps before reaching a value of correlation, between prediction and ground truth for each timesteps, lower than 0.5
     num_steps_batch = []
