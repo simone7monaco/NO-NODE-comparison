@@ -49,6 +49,8 @@ if __name__ == "__main__":
                         help='Download flag')
 
     # Nbody parameters:
+    parser.add_argument('--variable_deltaT', type=bool, default=False,
+                    help='The number of inputs to give for each prediction step.')
     parser.add_argument('--only_test', type=bool, default=True,
                     help='The number of inputs to give for each prediction step.')
     parser.add_argument('--traj_len', type=int, default=1,
@@ -107,8 +109,10 @@ if __name__ == "__main__":
 #     "epochs": args.epochs,
 #     "model": args.model,
 #     "nlayers": args.layers,  
+#     "variabel_deltaT": args.variable_deltaT,
+#     "traj_len": args.traj_len
 #     "num_timesteps": args.num_steps,
-#     "use_previous_state": args.use_previous_state
+#     "use_previous_state": args.use_previous_state,
 #     "only_test": args.only_test
 #     })
 

@@ -5,10 +5,22 @@ from models.model import SEGNO
 from torch_geometric.nn import knn_graph
 from nbody.dataset_nbody import NBodyDataset
 import json
+import wandb    
 time_exp_dic = {'time': 0, 'counter': 0}
 
 torch.manual_seed(40)
 
+def cumulative_random_tensor_indices(n, start, end):
+    # Generate the cumulative numpy array as before
+    random_array = np.random.randint(start, end, size=n)
+    print(random_array)
+    cumulative_array = np.cumsum(random_array)
+    print(cumulative_array)
+    
+    # Convert the cumulative numpy array to a PyTorch tensor
+    cumulative_tensor = torch.tensor(cumulative_array, dtype=torch.long)
+    
+    return cumulative_tensor
 
 def train(gpu, args):
     if args.gpus == 0:
@@ -110,8 +122,16 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         edge_attr = loc_dist.detach()
         
         if rollout:
-            locs_true = locs[40:140:10].to(device)
+            end = 40
+            variable_dt = False
             traj_len = locs_true.shape[0]
+            if args.variable_deltaT:
+                start = 35
+                indices = cumulative_random_tensor_indices(traj_len,1,10)
+                indices +=start
+                locs_true = locs[indices].to(device)
+            else:
+                locs_true = locs[end:args.num_steps*traj_len+end:10].to(device)
             if args.use_previous_state:
                 num_prev = 1
             else:
@@ -170,8 +190,13 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
     else:
         prefix = ""
     print('%s epoch %d avg loss: %.5f avg num steps %.4f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['avg_num_steps']))
-    
-    return res['loss'] / res['counter'], res
+    avg_loss = res['loss'] / res['counter']
+    if rollout:
+        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
+        return res['loss'] / res['counter'], res
+    else:
+        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
+        return res['loss'] / res['counter'], res
 
 
 def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, num_prev=0):
