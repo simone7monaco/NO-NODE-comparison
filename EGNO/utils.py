@@ -91,24 +91,42 @@ def _padding_3(tensor_list, max_size):
     res = torch.cat(res, dim=0)
     return res
 
-def pad_tensor_to_length_3d(tensor, target_length=10):
-    # Check if the first dimension length is already target_length or greater
-    if tensor.size(0) >= target_length:
-        return tensor[:target_length]  # Truncate if longer than target length
+def pad_tensor_to_length(tensor, target_length=10, dim=0):
+    # Check if the specified dimension size is already target_length or greater
+    if tensor.size(dim) >= target_length:
+        return tensor.narrow(dim, 0, target_length)  # Truncate if longer than target length
     
-    # Calculate the padding size
-    padding_size = target_length - tensor.size(0)
+    # Calculate the padding size along the specified dimension
+    padding_size = target_length - tensor.size(dim)
     
-    # Get the last element along the first dimension (shape [1, H, W])
-    last_element = tensor[-1].unsqueeze(0)
+    # Get the last element along the specified dimension
+    last_element = tensor.select(dim, tensor.size(dim) - 1).unsqueeze(dim)
     
-    # Repeat the last element along the first dimension to match the padding size
-    padding = last_element.repeat(padding_size, 1, 1)
+    # Repeat the last element along the specified dimension to match the padding size
+    repeat_sizes = [1] * tensor.dim()
+    repeat_sizes[dim] = padding_size
+    padding = last_element.repeat(*repeat_sizes)
     
-    # Concatenate the original tensor with the padding along the first dimension
-    padded_tensor = torch.cat((tensor, padding), dim=0)
+    # Concatenate the original tensor with the padding along the specified dimension
+    padded_tensor = torch.cat((tensor, padding), dim=dim)
     
     return padded_tensor
+
+def repeat_elements_to_exact_shape(tensor_list, n):
+    L = len(tensor_list)                    # Number of elements in the list
+    repeats_per_element = n // L            # Base number of repeats per element
+    remaining_repeats = n % L               # Extra repeats needed to reach exactly `n`
+    
+    # Repeat each tensor in the list `repeats_per_element` times
+    repeated_tensors = [tensor.repeat(repeats_per_element, *[1] * (tensor.dim() - 1)) for tensor in tensor_list]
+    
+    # Add extra repeats for the first `remaining_repeats` elements in the list
+    extra_repeats = [tensor_list[-1] for i in range(remaining_repeats)]
+    
+    # Concatenate all repeated tensors and the extra repeats
+    final_tensor = torch.cat(repeated_tensors + extra_repeats, dim=0)
+    
+    return final_tensor
 
 
 def _pack_edges(edge_list, n_node):

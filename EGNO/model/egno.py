@@ -1,6 +1,6 @@
 from model.basic import EGNN
 from model.layer_no import TimeConv, get_timestep_embedding, TimeConv_x
-from utils import pad_tensor_to_length_3d
+from utils import pad_tensor_to_length, repeat_elements_to_exact_shape
 import torch.nn as nn
 import torch
 
@@ -52,7 +52,7 @@ class EGNO(EGNN):
                 else:
                     htot = torch.cat([htot, hi])
              
-            h = htot
+            h = pad_tensor_to_length(htot,self.num_timesteps)
         else:
             h = h.unsqueeze(0).repeat(T, 1, 1)  # [T, BN, H]
 
@@ -64,30 +64,31 @@ class EGNO(EGNN):
        
         
         if self.num_inputs > 1 and len(x.shape) > 2:
-            for i in range(self.num_inputs):
-                xi = x[i].repeat(T // self.num_inputs, 1)
-                vi = v[i].repeat(T // self.num_inputs, 1)
-                loci = loc_mean[i].repeat(T // self.num_inputs, 1)
-                edge_fea_i = edge_fea[i].repeat(T // self.num_inputs, 1)
+            # for i in range(self.num_inputs):
+            #     xi = x[i].repeat(T // self.num_inputs, 1)
+            #     vi = v[i].repeat(T // self.num_inputs, 1)
+            #     loci = loc_mean[i].repeat(T // self.num_inputs, 1)
+            #     edge_fea_i = edge_fea[i].repeat(T // self.num_inputs, 1)
                 
-                if i == 0:
-                    x_tot = xi
-                    v_tot = vi
-                    loc_tot = loci
-                    edge_fea_tot = edge_fea_i
-                else:
-                    x_tot = torch.cat([x_tot, xi])
-                    v_tot = torch.cat([v_tot, vi])
-                    loc_tot = torch.cat([loc_tot, loci])
-                    edge_fea_tot = torch.cat([edge_fea_tot, edge_fea_i])
+            #     if i == 0:
+            #         x_tot = xi
+            #         v_tot = vi
+            #         loc_tot = loci
+            #         edge_fea_tot = edge_fea_i
+            #     else:
+            #         x_tot = torch.cat([x_tot, xi])
+            #         v_tot = torch.cat([v_tot, vi])
+            #         loc_tot = torch.cat([loc_tot, loci])
+            #         edge_fea_tot = torch.cat([edge_fea_tot, edge_fea_i])
                     
-            x = x_tot
-            v = v_tot
-            loc_mean = loc_tot
-            edge_fea = edge_fea_tot
+            x = repeat_elements_to_exact_shape(x,T)
+            v = repeat_elements_to_exact_shape(v,T)
+            loc_mean = repeat_elements_to_exact_shape(loc_mean,T)
+            edge_fea = repeat_elements_to_exact_shape(edge_fea,T)
             edges_0 = edge_index[0].repeat(T) + cumsum_edges
             edges_1 = edge_index[1].repeat(T) + cumsum_edges
             edge_index = [edges_0, edges_1]
+            
         else:
             x = x.repeat(T, 1)
             loc_mean = loc_mean.repeat(T, 1)
