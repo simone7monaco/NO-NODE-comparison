@@ -41,7 +41,7 @@ def train(gpu, args):
     for epoch in range(0, args.epochs):
         train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args, use_previous_state=args.use_previous_state)
         results['train loss'].append(train_loss)
-        if epoch % args.test_interval == 0 or epoch == args.epochs-1:
+        if (epoch+1) % args.test_interval == 0 or epoch == args.epochs-1:
 
             val_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_val, device, args, backprop=False,use_previous_state=args.use_previous_state)
             test_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_test,
