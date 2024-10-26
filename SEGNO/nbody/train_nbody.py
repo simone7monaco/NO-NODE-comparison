@@ -117,7 +117,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             else:
                 num_prev = 0
             loc_list = []
-            for i in range(num_prev):
+            for i in range(num_prev+1):
                 loc_list.append(locs[i*10+30]) #start from 30
             locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=num_prev).to(device)
 
@@ -192,6 +192,7 @@ def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, nu
             loc_preds[i] = loc
             
             loc = loc_list[prevs] #observed
+            
             edge_index = knn_graph(loc, 4, batch)
             h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
             rows, cols = edge_index
