@@ -331,10 +331,10 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     
 
     if rollout:
-        wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']})
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
         return res['loss'] / res['counter'], res['avg_num_steps']
     else:
-        wandb.log({f"{loader.dataset.partition}_loss": avg_loss})
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
         return res['loss'] / res['counter']
 
 
