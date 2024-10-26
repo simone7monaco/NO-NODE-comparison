@@ -53,7 +53,7 @@ if __name__ == "__main__":
                     help='The number of inputs to give for each prediction step.')
     parser.add_argument('--only_test', type=bool, default=True,
                     help='The number of inputs to give for each prediction step.')
-    parser.add_argument('--traj_len', type=int, default=1,
+    parser.add_argument('--traj_len', type=int, default=10,
                         help='Trajectory lenght in case of testing on rollout')
     parser.add_argument('--num_steps', type=int, default=10,
                         help='Delta t between each input/prediction step')

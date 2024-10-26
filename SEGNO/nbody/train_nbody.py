@@ -123,8 +123,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         
         if rollout:
             end = 40
-            variable_dt = False
-            traj_len = locs_true.shape[0]
+            
+            traj_len = args.traj_len
             if args.variable_deltaT:
                 start = 35
                 indices = cumulative_random_tensor_indices(traj_len,1,10)
