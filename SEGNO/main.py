@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch.multiprocessing as mp
 from nbody.train_nbody import train
+import wandb
 
 def _find_free_port():
     """ Find free port, so multiple runs don't clash """
@@ -21,6 +22,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     # Run parameters
+    parser.add_argument('--model', type=str, default='segno')
     parser.add_argument('--epochs', type=int, default=1000,
                         help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=128,
@@ -47,6 +49,12 @@ if __name__ == "__main__":
                         help='Download flag')
 
     # Nbody parameters:
+    parser.add_argument('--only_test', type=bool, default=True,
+                    help='The number of inputs to give for each prediction step.')
+    parser.add_argument('--traj_len', type=int, default=1,
+                        help='Trajectory lenght in case of testing on rollout')
+    parser.add_argument('--num_steps', type=int, default=10,
+                        help='Delta t between each input/prediction step')
     parser.add_argument('--use_previous_state', type=bool, default=False,
                         help='If use prev state')
     parser.add_argument('--nbody_name', type=str, default="nbody_small",
@@ -88,14 +96,32 @@ if __name__ == "__main__":
     args = parser.parse_args()
     task = "node"
 
+    # wandb.login()
+
+# wandb.init( project="NO-NODE-comparison",
+#            config={
+#     "learning_rate": args.lr,
+#     "weight_decay": args.weight_decay,
+#     "hidden_dim": args.hidden_features,
+#     "batch_size": args.batch_size,
+#     "epochs": args.epochs,
+#     "model": args.model,
+#     "nlayers": args.layers,  
+#     "num_timesteps": args.num_steps,
+#     "use_previous_state": args.use_previous_state
+#     "only_test": args.only_test
+#     })
+
     if args.gpus == 0:
         print('Starting training on the cpu...')
         args.mode = 'cpu'
         train(0, args)
+        #wandb.finish()
     elif args.gpus == 1:
         print('Starting training on a single gpu...')
         args.mode = 'gpu'
         train(0, args)
+        #wandb.finish()
     elif args.gpus > 1:
         print('Starting training on', args.gpus, 'gpus...')
         args.mode = 'gpu'

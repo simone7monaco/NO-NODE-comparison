@@ -112,11 +112,14 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         if rollout:
             locs_true = locs[40:140:10].to(device)
             traj_len = locs_true.shape[0]
-            num_prev = 1
+            if args.use_previous_state:
+                num_prev = 1
+            else:
+                num_prev = 0
             loc_list = []
             for i in range(num_prev):
                 loc_list.append(locs[i*10+30]) #start from 30
-            locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=0).to(device)
+            locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=num_prev).to(device)
 
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
@@ -128,7 +131,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             loss = torch.mean(losses)
             res['losses'].append(losses)
         else:
-            if use_previous_state:
+            if args.use_previous_state:
                 x, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
                 prev_x = x
                 pred_x = x
