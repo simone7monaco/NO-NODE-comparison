@@ -128,6 +128,14 @@ def repeat_elements_to_exact_shape(tensor_list, n):
     
     return final_tensor
 
+def cumulative_random_tensor_indices(size, start, end):
+    # Generate the cumulative numpy array as before
+    random_array = torch.randint(start, end, size=(size,))
+    
+    cumulative_tensor = torch.cumsum(random_array,dim=0)
+    
+    return cumulative_tensor,  random_array
+
 
 def _pack_edges(edge_list, n_node):
     for idx, edge in enumerate(edge_list):

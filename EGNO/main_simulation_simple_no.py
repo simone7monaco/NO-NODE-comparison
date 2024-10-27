@@ -4,7 +4,7 @@ import torch
 import torch.utils.data
 from simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
 from model.egno import EGNO
-from utils import EarlyStopping
+from utils import EarlyStopping, cumulative_random_tensor_indices
 import os
 from torch import nn, optim
 import json
@@ -63,10 +63,14 @@ parser.add_argument('--decoder_layer', type=int, default=1,
 parser.add_argument('--norm', action='store_true', default=False,
                     help='Use norm in EGNO')
 
+parser.add_argument('--variable_deltaT', type=bool, default=False,
+                    help='The number of inputs to give for each prediction step.')
 parser.add_argument('--only_test', type=bool, default=True,
                     help='The number of inputs to give for each prediction step.')
 parser.add_argument('--num_inputs', type=int, default=1,
                     help='The number of inputs to give for each prediction step.')
+parser.add_argument('--traj_len', type=int, default=10,
+                    help='The lenght of the trajectory in case of rollout.')
 parser.add_argument('--num_timesteps', type=int, default=10,
                     help='The number of time steps.')
 parser.add_argument('--time_emb_dim', type=int, default=32,
@@ -92,24 +96,25 @@ if args.config_by_file is not None:
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-wandb.login()
+# wandb.login()
 
-wandb.init( project="NO-NODE-comparison",
-           config={
-    "learning_rate": args.lr,
-    "weight_decay": args.weight_decay,
-    "hidden_dim": args.nf,
-    "dropout": args.dropout,
-    "batch_size": args.batch_size,
-    "epochs": args.epochs,
-    "model": args.model,
-    "nlayers": args.n_layers,  
-    "time_emb_dim": args.time_emb_dim,
-    "num_modes": args.num_modes,  
-    "num_timesteps": args.num_timesteps,
-    "num_inputs": args.num_inputs,
-    "only_test": args.only_test
-    })
+# wandb.init( project="NO-NODE-comparison",
+#            config={
+#     "learning_rate": args.lr,
+#     "weight_decay": args.weight_decay,
+#     "hidden_dim": args.nf,
+#     "dropout": args.dropout,
+#     "batch_size": args.batch_size,
+#     "epochs": args.epochs,
+#     "model": args.model,
+#     "nlayers": args.n_layers,  
+#     "time_emb_dim": args.time_emb_dim,
+#     "num_modes": args.num_modes,  
+#     "num_timesteps": args.num_timesteps,
+#     "num_inputs": args.num_inputs,
+#     "only_test": args.only_test,
+#     "variable_deltaT": args.variable_deltaT
+#     })
 
 
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -145,8 +150,8 @@ def main():
     loader_val = torch.utils.data.DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                              num_workers=0)
 
-    dataset_test = SimulationDataset(partition='test',
-                                     data_dir=args.data_dir, num_timesteps=args.num_timesteps, num_inputs=args.num_inputs, rollout=True, traj_len=10)
+    dataset_test = SimulationDataset(partition='test',data_dir=args.data_dir, num_timesteps=args.num_timesteps, 
+                                num_inputs=args.num_inputs, rollout=True, traj_len=args.traj_len, variable_deltaT= args.variable_deltaT)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                               num_workers=0)
 
@@ -212,8 +217,9 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
-        loc, vel, edge_attr, charges, loc_true = data
-        
+        loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[100, 5, 10, 3]
+        print(loc_true.shape)
+        exit()
         n_nodes = 5
         
         optimizer.zero_grad()
@@ -272,16 +278,31 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
             
             
             if rollout:
-                traj_len = 10
+                traj_len = args.traj_len
                 
-                locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
+                
+                # call rollout, get the returned indices, 
+                # retreieve them to get locs true accordingly
+                
                 #print(locs_true.shape)
-                locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size).to(device)
-                
+                if args.variable_deltaT:
+                    start = 30
+                    locs_pred, steps = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,variable_deltaT=args.variable_deltaT).to(device)
+                    end = steps[-1] + start
+                    locs_true = loc_true[start:end].view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
+                else:
+                    locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size).to(device)
+                    locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
+
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
                 #print(first_invalid_idx)
-                locs_pred = locs_pred[:20]
-                locs_true = locs_true[:20]
+                if first_invalid_idx > 10:
+                    sup = first_invalid_idx
+                else:
+                    sup = 20
+
+                locs_pred = locs_pred[:sup]
+                locs_true = locs_true[:sup]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
                 #locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
                 #locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
@@ -289,14 +310,12 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 
                 #loss with metric (A-MSE)
-                losses = loss_mse(locs_pred, locs_true).view(20, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
+                losses = loss_mse(locs_pred, locs_true).view(sup, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
                 #print(losses.shape)
-                #print(torch.max(losses))
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
                 #print(losses,torch.max(losses))
-                
-                #print(torch.isnan(losses).any(), torch.isinf(losses).any())
+            
                 loss = torch.mean(losses) 
                 
             else:
@@ -338,29 +357,44 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         return res['loss'] / res['counter']
 
 
-def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size):
+def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size,variable_deltaT=False):
     num_steps=10
-    loc_preds = torch.zeros((traj_len,batch_size*num_steps*n_nodes,3))
+    
     vel = v
+    
+    if variable_deltaT:
+    #   calculate random indices
+        steps, steps_size = cumulative_random_tensor_indices(size=10,start=5,end=15)
+        tot_num_step = steps[-1] 
+        #change shape of loc preds
+        loc_preds = torch.zeros((tot_num_step*batch_size*n_nodes,3))
+    # -> pass to egno at each cicle the respective number of steps for that iter
+    else:
+        loc_preds = torch.zeros((traj_len,batch_size*num_steps*n_nodes,3))
+
     for i in range(traj_len):
         #print("Inside loop \n")
-        #print(loc.shape,loc)
-        loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
-        #print(torch.isnan(loc).any(), torch.isinf(loc).any())
-        #print("loc")
-        #print(loc.shape)
-        # print(loc.shape)
-        loc_preds[i] = loc
-        #print(torch.sum(loc[-1]))
-        loc = loc.view(num_steps,-1, loc.shape[-1])[-1]#.transpose(0,1)[-1] #get last element in the inner trajectory
-        vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory
-        #print(loc.shape)
-        #print(torch.sum(loc))
-        #exit()
-        # print("loc \t")
-        # print(torch.isnan(loc).any(), torch.isinf(loc).any())
-        # print("vel \t")
-        # print(torch.isnan(vel).any(), torch.isinf(vel).any())
+        
+        if variable_deltaT:
+            if i == 0:
+                loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean, num_timesteps=steps_size[i])
+                loc_preds[:steps[i]] = loc
+                
+            else:
+                loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean, num_timesteps=steps_size[i])
+                loc_preds[steps[i-1]:steps[i]] = loc
+
+            loc = loc.view(steps_size[i],-1, loc.shape[-1])[-1] #get last element in the inner trajectory
+            vel = vel.view(steps_size[i], -1, vel.shape[-1])[-1] 
+        else:
+
+            loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
+            
+            loc_preds[i] = loc
+            loc = loc.view(num_steps,-1, loc.shape[-1])[-1]  #.transpose(0,1)[-1] #get last element in the inner trajectory
+            vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory
+            
+        
         nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
         rows, cols = edges
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
@@ -378,11 +412,13 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         # print(torch.isnan(loc_mean).any(), torch.isinf(loc_mean).any())
     
     # print("\n outside loop \n")
-    # print(torch.isnan(loc_preds).any())
+    if not variable_deltaT:
+        loc_preds = loc_preds.reshape(traj_len*num_steps, -1, 3)
+        return loc_preds
+    else:
+        return loc_preds, steps
     
-    loc_preds = loc_preds.reshape(traj_len*num_steps, -1, 3)
     
-    return loc_preds
 
 def pearson_correlation_batch(x, y, N):
     """
@@ -397,11 +433,11 @@ def pearson_correlation_batch(x, y, N):
     """
     
     # Reshape to (B, T, N*3) 
-    
+    cut = 25 # to avoid NaN values
     T = x.shape[0]
     B = x.size(1) // N
-    x = x.reshape( T, B, -1)[:25].transpose(0,1)  # Flatten N and 3 into a single dimension
-    y = y.reshape( T, B, -1)[:25].transpose(0,1)
+    x = x.reshape( T, B, -1)[:cut].transpose(0,1)  # Flatten N and 3 into a single dimension
+    y = y.reshape( T, B, -1)[:cut].transpose(0,1)
     
     
     # Mean subtraction

@@ -26,9 +26,9 @@ class EGNO(EGNN):
 
         self.to(self.device)
 
-    def forward(self, x, h, edge_index, edge_fea, v=None, loc_mean=None):  # [BN, H]
+    def forward(self, x, h, edge_index, edge_fea, v=None, loc_mean=None, num_timesteps=None):  # [BN, H]
 
-        T = self.num_timesteps
+        T = self.num_timesteps if num_timesteps is None else num_timesteps
 
         if self.num_inputs > 1 and len(x.shape) > 2:
             num_nodes = h[0].shape[0]
