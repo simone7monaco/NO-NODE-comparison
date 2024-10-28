@@ -201,9 +201,9 @@ def main():
                 print("Early Stopping.")
                 break
 
-        json_object = json.dumps(results, indent=4)
-        with open(args.outf + "/" + args.exp_name + "/loss.json", "w") as outfile:
-            outfile.write(json_object)
+    json_object = json.dumps(results, indent=4)
+    with open(args.outf + "/" + args.exp_name + "/loss.json", "w") as outfile:
+        outfile.write(json_object)
 
         
     return best_train_loss, best_val_loss, best_test_loss, best_epoch
