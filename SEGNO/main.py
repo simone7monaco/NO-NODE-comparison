@@ -109,7 +109,7 @@ if __name__ == "__main__":
 #     "epochs": args.epochs,
 #     "model": args.model,
 #     "nlayers": args.layers,  
-#     "variabel_deltaT": args.variable_deltaT,
+#     "variable_deltaT": args.variable_deltaT,
 #     "traj_len": args.traj_len,
 #     "num_timesteps": args.num_steps,
 #     "use_previous_state": args.use_previous_state,
