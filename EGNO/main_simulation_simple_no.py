@@ -168,7 +168,7 @@ def main():
     print(f'Model saved to {model_save_path}')
     early_stopping = EarlyStopping(patience=50, verbose=True, path=model_save_path)
 
-    results = {'eval epoch': [], 'val loss': [], 'test loss': [], 'train loss': []}
+    results = {'eval epoch': [], 'val loss': [], 'test loss': [], 'train loss': [],'traj_loss':[]}
     best_val_loss = 1e8
     best_test_loss = 1e8
     best_epoch = 0
@@ -178,11 +178,12 @@ def main():
         results['train loss'].append(train_loss)
         if (epoch +1) % args.test_interval == 0:
             val_loss = train(model, optimizer, epoch, loader_val,args, backprop=False)
-            test_loss, avg_num_steps = train(model, optimizer, epoch, loader_test,args, backprop=False, rollout=True)
+            test_loss, avg_num_steps, losses = train(model, optimizer, epoch, loader_test,args, backprop=False, rollout=True)
 
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
             results['test loss'].append(test_loss)
+            results['traj_loss'].append(losses)
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 best_test_loss = test_loss
@@ -211,15 +212,14 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     else:
         model.eval()
 
-    res = {'epoch': epoch, 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
+    res = {'epoch': epoch,'losses': [], 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
     
     #print(f"this is the {loader.dataset.partition} partition")
     
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[100, 5, 10, 3]
-        print(loc_true.shape)
-        exit()
+        
         n_nodes = 5
         
         optimizer.zero_grad()
@@ -286,21 +286,24 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 
                 #print(locs_true.shape)
                 if args.variable_deltaT:
+                    #print(loc_true.shape) #[100, 519, 5, 3]
+                    loc_true = loc_true.transpose(0,1).reshape(-1, batch_size*n_nodes, 3) #[519, 500, 3]
+                    #print(loc_true.shape)
                     start = 30
-                    locs_pred, steps = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,variable_deltaT=args.variable_deltaT).to(device)
+                    locs_pred, steps = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,variable_deltaT=args.variable_deltaT)
+                    locs_pred = locs_pred.to(device) # (T,BN,3)
                     end = steps[-1] + start
-                    locs_true = loc_true[start:end].view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
+                    
+                    locs_true = loc_true[start:end] #.view(batch_size * n_nodes, steps[-1], 3).transpose(0, 1)
+                    
                 else:
                     locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size).to(device)
                     locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
                 #print(first_invalid_idx)
-                if first_invalid_idx > 10:
-                    sup = first_invalid_idx
-                else:
-                    sup = 20
-
+                sup = first_invalid_idx if first_invalid_idx > 15 else 20
+                
                 locs_pred = locs_pred[:sup]
                 locs_true = locs_true[:sup]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
@@ -315,7 +318,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
                 #print(losses,torch.max(losses))
-            
+                res['losses'].append(losses.cpu().tolist())
                 loss = torch.mean(losses) 
                 
             else:
@@ -350,10 +353,10 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     
 
     if rollout:
-        wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
-        return res['loss'] / res['counter'], res['avg_num_steps']
+        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
+        return res['loss'] / res['counter'], res['avg_num_steps'], res['losses']
     else:
-        wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
+        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
         return res['loss'] / res['counter']
 
 
@@ -361,14 +364,15 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
     num_steps=10
     
     vel = v
-    
+    BN = batch_size*n_nodes
     if variable_deltaT:
     #   calculate random indices
         steps, steps_size = cumulative_random_tensor_indices(size=10,start=5,end=15)
         tot_num_step = steps[-1] 
         #change shape of loc preds
-        loc_preds = torch.zeros((tot_num_step*batch_size*n_nodes,3))
+        loc_preds = torch.zeros((tot_num_step*BN,3))
     # -> pass to egno at each cicle the respective number of steps for that iter
+        #print(loc_preds.shape,steps,steps_size)
     else:
         loc_preds = torch.zeros((traj_len,batch_size*num_steps*n_nodes,3))
 
@@ -378,11 +382,11 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         if variable_deltaT:
             if i == 0:
                 loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean, num_timesteps=steps_size[i])
-                loc_preds[:steps[i]] = loc
+                loc_preds[:steps[i]*BN] = loc
                 
             else:
                 loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean, num_timesteps=steps_size[i])
-                loc_preds[steps[i-1]:steps[i]] = loc
+                loc_preds[steps[i-1]*BN:steps[i]*BN] = loc
 
             loc = loc.view(steps_size[i],-1, loc.shape[-1])[-1] #get last element in the inner trajectory
             vel = vel.view(steps_size[i], -1, vel.shape[-1])[-1] 
@@ -416,6 +420,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc_preds = loc_preds.reshape(traj_len*num_steps, -1, 3)
         return loc_preds
     else:
+        loc_preds = loc_preds.reshape(tot_num_step, -1, 3)
         return loc_preds, steps
     
     
@@ -433,8 +438,8 @@ def pearson_correlation_batch(x, y, N):
     """
     
     # Reshape to (B, T, N*3) 
-    cut = 25 # to avoid NaN values
-    T = x.shape[0]
+    cut = 40 # to avoid NaN values
+    T = x.shape[0] 
     B = x.size(1) // N
     x = x.reshape( T, B, -1)[:cut].transpose(0,1)  # Flatten N and 3 into a single dimension
     y = y.reshape( T, B, -1)[:cut].transpose(0,1)
@@ -466,7 +471,7 @@ def pearson_correlation_batch(x, y, N):
             num_steps_before = (correlation[i] < 0.5).nonzero(as_tuple=True)[0][0].item()
             
         else:
-            num_steps_before = T
+            num_steps_before = cut
         num_steps_batch.append(num_steps_before)
 
     # Check if all values along B dimension are >= 0.5 for each T
@@ -474,7 +479,7 @@ def pearson_correlation_batch(x, y, N):
 
     # Convert the boolean mask to int for argmax
     first_failure_index = torch.argmax(~mask.int()).item()
-
+    print(first_failure_index,torch.mean(torch.Tensor(num_steps_batch)),correlation[0])
     # If no failures, return the number of columns as the "end"
     if mask.all():
         first_failure_index = correlation.size(1)       
@@ -497,4 +502,4 @@ if __name__ == "__main__":
     print("best_train = %.6f, best_val = %.6f, best_test = %.6f, best_epoch = %d"
           % (best_train_loss, best_val_loss, best_test_loss, best_epoch))
 
-    wandb.finish()
+    #wandb.finish()
