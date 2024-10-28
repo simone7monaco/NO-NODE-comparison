@@ -63,6 +63,8 @@ parser.add_argument('--decoder_layer', type=int, default=1,
 parser.add_argument('--norm', action='store_true', default=False,
                     help='Use norm in EGNO')
 
+parser.add_argument('--rollout', type=bool, default=False,
+                    help='The number of inputs to give for each prediction step.')
 parser.add_argument('--variable_deltaT', type=bool, default=False,
                     help='The number of inputs to give for each prediction step.')
 parser.add_argument('--only_test', type=bool, default=True,
@@ -110,6 +112,7 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 #     "nlayers": args.n_layers,  
 #     "time_emb_dim": args.time_emb_dim,
 #     "num_modes": args.num_modes,  
+#     "rollout": args.rollout,  
 #     "num_timesteps": args.num_timesteps,
 #     "num_inputs": args.num_inputs,
 #     "only_test": args.only_test,
@@ -151,7 +154,7 @@ def main():
                                              num_workers=0)
 
     dataset_test = SimulationDataset(partition='test',data_dir=args.data_dir, num_timesteps=args.num_timesteps, 
-                                num_inputs=args.num_inputs, rollout=True, traj_len=args.traj_len, variable_deltaT= args.variable_deltaT)
+                                num_inputs=args.num_inputs, rollout=args.rollout, traj_len=args.traj_len, variable_deltaT= args.variable_deltaT)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                               num_workers=0)
 
@@ -178,7 +181,7 @@ def main():
         results['train loss'].append(train_loss)
         if (epoch +1) % args.test_interval == 0:
             val_loss = train(model, optimizer, epoch, loader_val,args, backprop=False)
-            test_loss, avg_num_steps, losses = train(model, optimizer, epoch, loader_test,args, backprop=False, rollout=True)
+            test_loss, avg_num_steps, losses = train(model, optimizer, epoch, loader_test,args, backprop=False, rollout=args.rollout)
 
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
