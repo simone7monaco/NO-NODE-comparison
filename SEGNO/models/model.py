@@ -4,7 +4,8 @@ from models.models.gcl import GCL, E_GCL, E_GCL_ERGN_vel
 
 class SEGNO(nn.Module):
     def __init__(self, in_node_nf, in_edge_nf, hidden_nf, device='cpu', act_fn=nn.SiLU(), n_layers=4, coords_weight=1.0,
-                 recurrent=False, norm_diff=False, tanh=False, invariant=True, norm_vel=True, emp=True, use_previous_state=False):
+                 recurrent=False, norm_diff=False, tanh=False, invariant=True, norm_vel=True, emp=True, use_previous_state=False,
+                 variable_T=False):
         super(SEGNO, self).__init__()
         self.hidden_nf = hidden_nf
         self.device = device
@@ -13,6 +14,7 @@ class SEGNO(nn.Module):
         self.invariant = invariant
         self.norm_vel = norm_vel
         self.use_previous_state = use_previous_state
+        self.variable_T = variable_T
         self.emp = emp
         self.sigmoid = nn.Sigmoid()
         self.forget = nn.Sequential(nn.Linear(hidden_nf + 3, 1)) if invariant else nn.Sequential(nn.Linear(hidden_nf + 6, 1))
@@ -35,12 +37,18 @@ class SEGNO(nn.Module):
                                                         act_fn=act_fn, recurrent=recurrent))
         self.to(self.device)
 
-    def forward(self, his, loc, edges, vel, edge_attr, prev_x=None):
+    def forward(self, his, loc, edges, vel, edge_attr, prev_x=None,T=10):
         his = self.embedding(his)
+
+        if self.variable_T:
+            self.module.n_layers = self.n_layers*T
+            #add timestep embedding (maybe not needed)
+            
         h, x, v, _ = self.module(his, edges, loc, vel, vel, edge_attr=edge_attr)
         h = his + h
-
+        
         if self.use_previous_state and prev_x is not None: 
+            #use time embedding and change n_layers according to the distance T between input and predicted output
             x = x + prev_x         #to combine informations from previously predicted current state (prev_x) and observed current state (x)
                                     #change aggregation method
         for i in range(1, self.n_layers):

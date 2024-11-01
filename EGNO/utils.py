@@ -112,13 +112,13 @@ def pad_tensor_to_length(tensor, target_length=10, dim=0):
     
     return padded_tensor
 
-def repeat_elements_to_exact_shape(tensor_list, n):
+def repeat_elements_to_exact_shape(tensor_list, n, outdims=None):
     L = len(tensor_list)                    # Number of elements in the list
     repeats_per_element = n // L            # Base number of repeats per element
     remaining_repeats = n % L               # Extra repeats needed to reach exactly `n`
-    
+    outdims = outdims if outdims is not None else tensor_list[0].dim()
     # Repeat each tensor in the list `repeats_per_element` times
-    repeated_tensors = [tensor.repeat(repeats_per_element, *[1] * (tensor.dim() - 1)) for tensor in tensor_list]
+    repeated_tensors = [tensor.repeat(repeats_per_element, *[1] * (outdims - 1)) for tensor in tensor_list]
     
     # Add extra repeats for the first `remaining_repeats` elements in the list
     extra_repeats = [tensor_list[-1] for i in range(remaining_repeats)]

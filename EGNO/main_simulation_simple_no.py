@@ -63,7 +63,7 @@ parser.add_argument('--decoder_layer', type=int, default=1,
 parser.add_argument('--norm', action='store_true', default=False,
                     help='Use norm in EGNO')
 
-parser.add_argument('--rollout', type=bool, default=False,
+parser.add_argument('--rollout', type=bool, default=True,
                     help='The number of inputs to give for each prediction step.')
 parser.add_argument('--variable_deltaT', type=bool, default=False,
                     help='The number of inputs to give for each prediction step.')
@@ -144,12 +144,12 @@ def main():
     torch.cuda.manual_seed(seed)
 
     dataset_train = SimulationDataset(partition='train', max_samples=args.max_training_samples,
-                                      data_dir=args.data_dir, num_timesteps=args.num_timesteps) #, num_inputs=args.num_inputs
+                                      data_dir=args.data_dir, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs) #, num_inputs=args.num_inputs
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
                                                num_workers=0)
 
     dataset_val = SimulationDataset(partition='val',
-                                    data_dir=args.data_dir, num_timesteps=args.num_timesteps )#num_inputs=args.num_inputs
+                                    data_dir=args.data_dir, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs)#num_inputs=args.num_inputs
     loader_val = torch.utils.data.DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                              num_workers=0)
 
@@ -229,8 +229,8 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
 
         if args.model == 'egno':
 
-            if args.num_inputs > 1 and rollout:
-                loc = loc.transpose(0,1) #2,100,5,3
+            if args.num_inputs > 1 : #and rollout
+                loc = loc.transpose(0,1) #T,100,5,3
                 vel = vel.transpose(0,1)
                 
                 batch_size = args.batch_size 

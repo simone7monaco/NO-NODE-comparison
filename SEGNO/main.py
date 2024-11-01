@@ -49,6 +49,8 @@ if __name__ == "__main__":
                         help='Download flag')
 
     # Nbody parameters:
+    parser.add_argument('--num_inputs', type=int, default=1,
+                    help='The number of inputs to give for rollout training')
     parser.add_argument('--variable_deltaT', type=bool, default=False,
                     help='The number of inputs to give for each prediction step.')
     parser.add_argument('--only_test', type=bool, default=True,
@@ -82,8 +84,8 @@ if __name__ == "__main__":
                         help='max degree of geometric attribute embedding')
     parser.add_argument('--subspace_type', type=str, default="weightbalanced",
                         help='How to divide spherical harmonic subspaces')
-    parser.add_argument('--layers', type=int, default=7,
-                        help='Number of message passing layers')
+    parser.add_argument('--layers', type=int, default=1, #7
+                         help='Number of message passing layers')
     parser.add_argument('--norm', type=str, default="instance",
                         help='Normalisation type [instance, batch]')
     parser.add_argument('--pool', type=str, default="avg",
