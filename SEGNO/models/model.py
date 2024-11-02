@@ -37,7 +37,7 @@ class SEGNO(nn.Module):
                                                         act_fn=act_fn, recurrent=recurrent))
         self.to(self.device)
 
-    def forward(self, his, loc, edges, vel, edge_attr, prev_x=None,T=10):
+    def forward(self, his, loc, edges, vel, edge_attr, prev_x=None, T=10):
         his = self.embedding(his)
 
         if self.variable_T:
@@ -48,7 +48,7 @@ class SEGNO(nn.Module):
         h = his + h
         
         if self.use_previous_state and prev_x is not None: 
-            #use time embedding and change n_layers according to the distance T between input and predicted output
+            #consider using time embedding and change n_layers according to the distance T between input and predicted output
             x = x + prev_x         #to combine informations from previously predicted current state (prev_x) and observed current state (x)
                                     #change aggregation method
         for i in range(1, self.n_layers):

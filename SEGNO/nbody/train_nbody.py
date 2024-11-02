@@ -49,7 +49,7 @@ def train(gpu, args):
     best_test_loss = 1e8
     best_epoch = 0
     best = {'long_loss': {}}
-    print(args.use_previous_state)
+    print(args.use_previous_state,args.num_inputs,args.only_test)
     for epoch in range(0, args.epochs):
         train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args, use_previous_state=args.use_previous_state)
         results['train loss'].append(train_loss)
@@ -132,12 +132,9 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                 locs_true = locs[indices].to(device)
             else:
                 locs_true = locs[end:args.num_steps*traj_len+end:10].to(device)
-            if args.use_previous_state:
-                num_prev = 1
-            else:
-                num_prev = 0
+            num_prev = args.num_inputs
             loc_list = []
-            for i in range(num_prev+1):
+            for i in range(num_prev):
                 loc_list.append(locs[i*10+30]) #start from 30
             locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=num_prev).to(device)
 
@@ -152,24 +149,35 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             res['losses'].append(losses)
         else:
             if args.use_previous_state and not args.only_test:
-                x, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
-                prev_x = x
-                pred_x = x
-                #call model again with new observed values and prev_x
-                loc, vel = locs[35], vels[35] #take sample corresponding to half the delta t (just a try)
-                #loc_end = torch.cat(loc,loc_end)
-                batch = torch.arange(0, batch_size)
-                batch = batch.repeat_interleave(n_nodes).long().to(device)
-                
-                edge_index = knn_graph(loc, 4, batch)
-                h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
-                rows, cols = edge_index
-                loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
-                edge_attr = loc_dist.detach()
-
-                loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev_x)
+                start = 30
+                half_step = 5
+                prev_x = None
+                preds = []
+                targets = []
+                for i in range(args.num_inputs):
+                    x, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev_x, T=half_step)
+                    prev_x = x
+                    pred_x = x
+                    preds.append(pred_x)
+                    #call model again with new observed values and prev_x
+                    
+                    loc, vel = locs[start+half_step], vels[start+half_step] #take sample corresponding to half the delta t (just a try)
+                    #loc_end = torch.cat(loc,loc_end)
+                    targets.append(loc)
+                    batch = torch.arange(0, batch_size)
+                    batch = batch.repeat_interleave(n_nodes).long().to(device)
+                    
+                    edge_index = knn_graph(loc, 4, batch)
+                    h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+                    rows, cols = edge_index
+                    loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
+                    edge_attr = loc_dist.detach()
+                    start += half_step
+                    #loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev_x)
                 #loc_pred = torch.cat(pred_x, loc_pred)
-                loss = criterion(loc_pred, loc_end) #maybe consider intermediate steps for loss computation
+                preds = torch.stack(preds)
+                targets = torch.stack(targets)
+                loss = criterion(preds, targets) #maybe consider intermediate steps for loss computation
 
             else:
                 loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
@@ -199,9 +207,9 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         return res['loss'] / res['counter'], res
 
 
-def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, num_prev=0):
+def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, num_prev=1):
 
-    
+    step = 10
     vel = v
     prev = None
     prevs = 0
@@ -211,11 +219,10 @@ def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, nu
     
     for i in range(traj_len):
         
-        if num_prev != 0 and i < num_prev:
+        if num_prev > 1 and (i + 1) < num_prev:
             prev = loc   #predicted
             prevs +=1
             loc_preds[i] = loc
-            
             loc = loc_list[prevs] #observed
             
             edge_index = knn_graph(loc, 4, batch)
@@ -223,16 +230,15 @@ def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, nu
             rows, cols = edge_index
             loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
             edge_attr = loc_dist.detach()
-            loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev)
+            loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev, T=step)
         else:
             loc_preds[i] = loc
-            
             edge_index = knn_graph(loc, 4, batch)
             h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
             rows, cols = edge_index
             loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
             edge_attr = loc_dist.detach()
-            loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+            loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, T=step)
 
     
     return loc_preds
