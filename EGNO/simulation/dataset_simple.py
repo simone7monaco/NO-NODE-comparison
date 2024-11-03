@@ -122,6 +122,15 @@ class NBodyDynamicsDataset(NBodyDataset):
             raise Exception("Wrong dataset partition %s" % self.dataset_name)
         
         if self.rollout:
+            if self.var_dt and self.num_inputs>1:
+                
+                assert self.num_inputs <= self.num_timesteps
+                idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
+                loc_inputs = loc[frame_0 + idxs]
+                vel_inputs = vel[frame_0 + idxs]
+                
+                return loc_inputs, vel_inputs, edge_attr, charges, locs
+                
             if self.var_dt:
                 #return all locs so that after its possible to select different delta T across the trajectory
                 return loc[frame_0], vel[frame_0], edge_attr, charges, loc 

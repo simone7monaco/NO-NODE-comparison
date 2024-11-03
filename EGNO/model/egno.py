@@ -46,7 +46,7 @@ class EGNO(EGNN):
         elif self.num_inputs >1:
             num_nodes = h.shape[0]
             #for rollout after the first step all the others have just one input step, hence equal inpu time embedding
-            time_emb_in = time_emb = get_timestep_embedding(torch.zeros(T).to(x), embedding_dim=self.time_emb_dim, max_positions=10000)
+            time_emb_in = time_emb = get_timestep_embedding(torch.ones(T).to(x), embedding_dim=self.time_emb_dim, max_positions=10000)
             time_emb = get_timestep_embedding(torch.arange(T).to(x), embedding_dim=self.time_emb_dim, max_positions=10000)  # [T, H_t]
         else:
             num_nodes = h.shape[0]

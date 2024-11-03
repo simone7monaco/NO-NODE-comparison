@@ -150,19 +150,27 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             res['losses'].append(losses)
         else:
             if args.use_previous_state and not args.only_test:
+                steps = None
+                if args.variable_deltaT:
+                    start = 30
+                    #pass steps to rollout to call the model at each iter with the corerct T
+                    indices, steps = cumulative_random_tensor_indices(args.num_inputs,1,10)
+                    indices +=start
+                    locs_true = locs[indices].to(device)
                 start = 30
                 half_step = 10
+                steps = steps if steps is not None else [half_step for _ in range(args.num_inputs)]
                 prev_x = None
                 preds = []
                 targets = []
                 for i in range(args.num_inputs):
-                    x, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev_x, T=half_step)
+                    x, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev_x, T=steps[i])
                     prev_x = x
                     pred_x = x
                     preds.append(pred_x)
                     #call model again with new observed values and prev_x
                     
-                    loc, vel = locs[start+half_step], vels[start+half_step] #take sample corresponding to half the delta t (just a try)
+                    loc, vel = locs[start+steps[i]], vels[start+steps[i]] #take sample corresponding to half the delta t (just a try)
                     #loc_end = torch.cat(loc,loc_end)
                     targets.append(loc)
                     batch = torch.arange(0, batch_size)

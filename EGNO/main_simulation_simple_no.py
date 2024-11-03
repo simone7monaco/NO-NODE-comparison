@@ -482,7 +482,7 @@ def pearson_correlation_batch(x, y, N):
 
     # Convert the boolean mask to int for argmax
     first_failure_index = torch.argmax(~mask.int()).item()
-    print(first_failure_index,torch.mean(torch.Tensor(num_steps_batch)),correlation[0])
+    #print(first_failure_index,torch.mean(torch.Tensor(num_steps_batch)),correlation[0])
     # If no failures, return the number of columns as the "end"
     if mask.all():
         first_failure_index = correlation.size(1)       
