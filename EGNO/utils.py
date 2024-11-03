@@ -122,9 +122,11 @@ def repeat_elements_to_exact_shape(tensor_list, n, outdims=None):
     
     # Add extra repeats for the first `remaining_repeats` elements in the list
     extra_repeats = [tensor_list[-1] for i in range(remaining_repeats)]
-    
+    # for tensor in repeated_tensors + extra_repeats:
+    #     print(tensor.shape)
     # Concatenate all repeated tensors and the extra repeats
-    final_tensor = torch.cat(repeated_tensors + extra_repeats, dim=0)
+    final_list = repeated_tensors + extra_repeats
+    final_tensor = torch.cat(final_list, dim=0)
     
     return final_tensor
 
@@ -136,6 +138,68 @@ def cumulative_random_tensor_indices(size, start, end):
     
     return cumulative_tensor,  random_array
 
+def cumulative_random_tensor_indices_capped(N, start, end, MAX=100):
+    """
+    Generates a random integer tensor and adjusts it so that its cumulative sum equals MAX.
+    
+    Args:
+    - N (int): Length of the tensor.
+    - start (int): Minimum value for random integers (inclusive).
+    - end (int): Maximum value for random integers (exclusive).
+    - MAX (int): Desired cumulative sum target (default is 100).
+    
+    Returns:
+    - torch.Tensor: The adjusted random tensor.
+    - torch.Tensor: The cumulative sum of the adjusted random tensor.
+    """
+    # Step 1: Generate a random integer tensor of size N within [start, end)
+    random_array = torch.randint(start, end, (N,))
+    
+    # Step 2: Calculate the initial sum and scale values to approach MAX
+    initial_sum = random_array.sum().item()
+    
+    # If initial sum is zero, reinitialize random_array to avoid division by zero
+    while initial_sum == 0:
+        random_array = torch.randint(start, end, (N,))
+        initial_sum = random_array.sum().item()
+
+    # Scale values to approximate the sum to MAX
+    scaled_array = torch.round((random_array.float() / initial_sum) * MAX).int()
+
+    # Step 3: Correct any rounding difference to ensure sum equals MAX
+    diff = MAX - scaled_array.sum().item()
+    
+    if diff != 0:
+        # Randomly adjust elements to make the sum exactly MAX
+        indices = torch.randperm(N)
+        for i in indices:
+            # Ensure values stay within the [start, end) range after adjustment
+            if start <= scaled_array[i] + diff < end:
+                scaled_array[i] += diff
+                break  # Exit once sum is corrected
+    
+    # Step 4: Calculate cumulative sum tensor
+    cumulative_tensor = torch.cumsum(scaled_array, dim=0)
+
+    return scaled_array, cumulative_tensor
+
+def random_ascending_tensor(length, min_value=1, max_value=15):
+    """
+    Generates a random tensor of specified length, in ascending order, with no duplicates.
+    
+    Args:
+    - length (int): Desired length of the output tensor.
+    - min_value (int): Minimum possible value (inclusive).
+    - max_value (int): Maximum possible value (inclusive).
+    
+    Returns:
+    - torch.Tensor: A 1-D tensor with unique, ascending random values.
+    """
+    # Generate a sorted list of unique random values
+    unique_values = torch.randperm(max_value - min_value + 1)[:length] + min_value
+    unique_values = unique_values.sort().values  # Sort the values in ascending order
+    
+    return unique_values
 
 def _pack_edges(edge_list, n_node):
     for idx, edge in enumerate(edge_list):

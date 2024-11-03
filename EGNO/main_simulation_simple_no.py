@@ -4,7 +4,7 @@ import torch
 import torch.utils.data
 from simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
 from model.egno import EGNO
-from utils import EarlyStopping, cumulative_random_tensor_indices
+from utils import EarlyStopping, cumulative_random_tensor_indices_capped
 import os
 from torch import nn, optim
 import json
@@ -63,6 +63,8 @@ parser.add_argument('--decoder_layer', type=int, default=1,
 parser.add_argument('--norm', action='store_true', default=False,
                     help='Use norm in EGNO')
 
+parser.add_argument('--varDT', type=bool, default=False,
+                    help='The number of inputs to give for each prediction step.')
 parser.add_argument('--rollout', type=bool, default=True,
                     help='The number of inputs to give for each prediction step.')
 parser.add_argument('--variable_deltaT', type=bool, default=False,
@@ -161,7 +163,7 @@ def main():
     if args.model == 'egno':
         model = EGNO(n_layers=args.n_layers, in_node_nf=1, in_edge_nf=2, hidden_nf=args.nf, device=device,
                      with_v=True, flat=args.flat, activation=nn.SiLU(), norm=args.norm, use_time_conv=True,
-                     num_modes=args.num_modes, num_timesteps=args.num_timesteps, time_emb_dim=args.time_emb_dim, num_inputs=args.num_inputs)
+                     num_modes=args.num_modes, num_timesteps=args.num_timesteps, time_emb_dim=args.time_emb_dim, num_inputs=args.num_inputs, varDT=args.varDT)
     else:
         raise NotImplementedError('Unknown model:', args.model)
 
@@ -176,6 +178,7 @@ def main():
     best_test_loss = 1e8
     best_epoch = 0
     best_train_loss = 1e8
+    print(args.rollout,args.num_inputs,args.varDT)
     for epoch in range(0, args.epochs):
         train_loss = train(model, optimizer, epoch, loader_train,args)
         results['train loss'].append(train_loss)
@@ -370,7 +373,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
     BN = batch_size*n_nodes
     if variable_deltaT:
     #   calculate random indices
-        steps, steps_size = cumulative_random_tensor_indices(size=10,start=5,end=15)
+        steps, steps_size = cumulative_random_tensor_indices_capped(N=traj_len,start=5,end=15)
         tot_num_step = steps[-1] 
         #change shape of loc preds
         loc_preds = torch.zeros((tot_num_step*BN,3))
@@ -383,6 +386,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         #print("Inside loop \n")
         
         if variable_deltaT:
+            #print(i,steps[i],steps_size[i])
             if i == 0:
                 loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean, num_timesteps=steps_size[i])
                 loc_preds[:steps[i]*BN] = loc

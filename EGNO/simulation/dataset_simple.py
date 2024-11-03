@@ -129,7 +129,7 @@ class NBodyDynamicsDataset(NBodyDataset):
                 loc_inputs = loc[frame_0 + idxs]
                 vel_inputs = vel[frame_0 + idxs]
                 
-                return loc_inputs, vel_inputs, edge_attr, charges, locs
+                return loc_inputs, vel_inputs, edge_attr, charges, loc
                 
             if self.var_dt:
                 #return all locs so that after its possible to select different delta T across the trajectory
