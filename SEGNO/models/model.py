@@ -40,8 +40,10 @@ class SEGNO(nn.Module):
     def forward(self, his, loc, edges, vel, edge_attr, prev_x=None, T=10):
         his = self.embedding(his)
 
-        if self.variable_T:
-            self.module.n_layers = self.n_layers*T
+        #if self.variable_T:
+        self.n_layers = T
+        self.module.n_layers = self.n_layers
+       
             #add timestep embedding (maybe not needed)
             
         h, x, v, _ = self.module(his, edges, loc, vel, vel, edge_attr=edge_attr)

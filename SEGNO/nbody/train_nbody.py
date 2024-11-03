@@ -155,8 +155,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                     start = 30
                     #pass steps to rollout to call the model at each iter with the corerct T
                     indices, steps = cumulative_random_tensor_indices(args.num_inputs,1,10)
-                    indices +=start
-                    locs_true = locs[indices].to(device)
+                    #indices +=start
+                    #locs_true = locs[indices].to(device)
                 start = 30
                 half_step = 10
                 steps = steps if steps is not None else [half_step for _ in range(args.num_inputs)]
