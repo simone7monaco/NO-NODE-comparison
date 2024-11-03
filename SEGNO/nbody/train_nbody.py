@@ -13,14 +13,14 @@ torch.manual_seed(40)
 def cumulative_random_tensor_indices(n, start, end):
     # Generate the cumulative numpy array as before
     random_array = np.random.randint(start, end, size=n)
-    print(random_array)
+    #print(random_array)
     cumulative_array = np.cumsum(random_array)
-    print(cumulative_array)
+    #print(cumulative_array)
     
     # Convert the cumulative numpy array to a PyTorch tensor
     cumulative_tensor = torch.tensor(cumulative_array, dtype=torch.long)
     
-    return cumulative_tensor
+    return cumulative_tensor, torch.tensor(random_array)
 
 def train(gpu, args):
     if args.gpus == 0:
@@ -127,7 +127,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             traj_len = args.traj_len
             if args.variable_deltaT:
                 start = 30
-                indices = cumulative_random_tensor_indices(traj_len,1,10)
+                #pass steps to rollout to call the model at each iter with the corerct T
+                indices, steps = cumulative_random_tensor_indices(traj_len,1,10)
                 indices +=start
                 locs_true = locs[indices].to(device)
             else:
@@ -150,7 +151,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         else:
             if args.use_previous_state and not args.only_test:
                 start = 30
-                half_step = 5
+                half_step = 10
                 prev_x = None
                 preds = []
                 targets = []
