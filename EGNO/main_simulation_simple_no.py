@@ -118,6 +118,7 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 #     "num_timesteps": args.num_timesteps,
 #     "num_inputs": args.num_inputs,
 #     "only_test": args.only_test,
+#     "varDT": args.varDT,
 #     "variable_deltaT": args.variable_deltaT
 #     })
 
@@ -171,7 +172,7 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     model_save_path = args.outf + '/' + args.exp_name + '/' + 'saved_model.pth'
     print(f'Model saved to {model_save_path}')
-    early_stopping = EarlyStopping(patience=50, verbose=True, path=model_save_path)
+    early_stopping = EarlyStopping(patience=25, verbose=True, path=model_save_path)
 
     results = {'eval epoch': [], 'val loss': [], 'test loss': [], 'train loss': [],'traj_loss':[]}
     best_val_loss = 1e8

@@ -22,6 +22,51 @@ def cumulative_random_tensor_indices(n, start, end):
     
     return cumulative_tensor, torch.tensor(random_array)
 
+def cumulative_random_tensor_indices_capped(N, start, end, MAX=100):
+    """
+    Generates a random integer tensor and adjusts it so that its cumulative sum equals MAX.
+    
+    Args:
+    - N (int): Length of the tensor.
+    - start (int): Minimum value for random integers (inclusive).
+    - end (int): Maximum value for random integers (exclusive).
+    - MAX (int): Desired cumulative sum target (default is 100).
+    
+    Returns:
+    - torch.Tensor: The adjusted random tensor.
+    - torch.Tensor: The cumulative sum of the adjusted random tensor.
+    """
+    # Step 1: Generate a random integer tensor of size N within [start, end)
+    random_array = torch.randint(start, end, (N,))
+    
+    # Step 2: Calculate the initial sum and scale values to approach MAX
+    initial_sum = random_array.sum().item()
+    
+    # If initial sum is zero, reinitialize random_array to avoid division by zero
+    while initial_sum == 0:
+        random_array = torch.randint(start, end, (N,))
+        initial_sum = random_array.sum().item()
+
+    # Scale values to approximate the sum to MAX
+    scaled_array = torch.round((random_array.float() / initial_sum) * MAX).int()
+
+    # Step 3: Correct any rounding difference to ensure sum equals MAX
+    diff = MAX - scaled_array.sum().item()
+    
+    if diff != 0:
+        # Randomly adjust elements to make the sum exactly MAX
+        indices = torch.randperm(N)
+        for i in indices:
+            # Ensure values stay within the [start, end) range after adjustment
+            if start <= scaled_array[i] + diff < end:
+                scaled_array[i] += diff
+                break  # Exit once sum is corrected
+    
+    # Step 4: Calculate cumulative sum tensor
+    cumulative_tensor = torch.cumsum(scaled_array, dim=0)
+
+    return  cumulative_tensor,scaled_array
+
 def train(gpu, args):
     if args.gpus == 0:
         device = 'cpu'
@@ -128,7 +173,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             if args.variable_deltaT:
                 start = 30
                 #pass steps to rollout to call the model at each iter with the corerct T
-                indices, steps = cumulative_random_tensor_indices(traj_len,1,10)
+                indices, steps = cumulative_random_tensor_indices_capped(traj_len,5,15)#cumulative_random_tensor_indices(traj_len,1,10)
                 indices +=start
                 locs_true = locs[indices].to(device)
             else:
@@ -154,7 +199,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                 if args.variable_deltaT:
                     start = 30
                     #pass steps to rollout to call the model at each iter with the corerct T
-                    indices, steps = cumulative_random_tensor_indices(args.num_inputs,1,10)
+                    indices, steps = cumulative_random_tensor_indices_capped(traj_len,5,15)#cumulative_random_tensor_indices(args.num_inputs,1,10)
                     #indices +=start
                     #locs_true = locs[indices].to(device)
                 start = 30

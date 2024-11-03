@@ -181,7 +181,7 @@ def cumulative_random_tensor_indices_capped(N, start, end, MAX=100):
     # Step 4: Calculate cumulative sum tensor
     cumulative_tensor = torch.cumsum(scaled_array, dim=0)
 
-    return scaled_array, cumulative_tensor
+    return cumulative_tensor, scaled_array
 
 def random_ascending_tensor(length, min_value=1, max_value=15):
     """
