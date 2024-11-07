@@ -4,7 +4,7 @@ import torch
 import torch.utils.data
 from simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
 from model.egno import EGNO
-from utils import EarlyStopping, cumulative_random_tensor_indices_capped
+from utils import EarlyStopping, cumulative_random_tensor_indices_capped, random_ascending_tensor
 import os
 from torch import nn, optim
 import json
@@ -147,17 +147,17 @@ def main():
     torch.cuda.manual_seed(seed)
 
     dataset_train = SimulationDataset(partition='train', max_samples=args.max_training_samples,
-                                      data_dir=args.data_dir, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs) #, num_inputs=args.num_inputs
+                                      data_dir=args.data_dir, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT) #, num_inputs=args.num_inputs
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
                                                num_workers=0)
 
     dataset_val = SimulationDataset(partition='val',
-                                    data_dir=args.data_dir, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs)#num_inputs=args.num_inputs
+                                    data_dir=args.data_dir, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT)#num_inputs=args.num_inputs
     loader_val = torch.utils.data.DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                              num_workers=0)
 
     dataset_test = SimulationDataset(partition='test',data_dir=args.data_dir, num_timesteps=args.num_timesteps, 
-                                num_inputs=args.num_inputs, rollout=args.rollout, traj_len=args.traj_len, variable_deltaT= args.variable_deltaT)
+                                num_inputs=args.num_inputs, rollout=args.rollout, traj_len=args.traj_len, varDT= args.varDT)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                               num_workers=0)
 
@@ -225,8 +225,8 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
-        loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[100, 5, 10, 3]
-        
+        loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[B, 5, T, 3]
+          #loc.shape : [B, num_inputs, 5, 3]
         n_nodes = 5
         
         optimizer.zero_grad()
@@ -234,8 +234,14 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         if args.model == 'egno':
 
             if args.num_inputs > 1 : #and rollout
+                timesteps = None
+                start = 30
                 loc = loc.transpose(0,1) #T,100,5,3
                 vel = vel.transpose(0,1)
+                if args.varDT:
+                    timesteps = random_ascending_tensor(length=args.num_inputs).to(device)
+                    loc = loc[start + timesteps]
+                    vel = vel[start + timesteps]
                 
                 batch_size = args.batch_size 
                 edges = loader.dataset.get_edges(batch_size, n_nodes)
@@ -304,7 +310,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                     locs_true = loc_true[start:end] #.view(batch_size * n_nodes, steps[-1], 3).transpose(0, 1)
                     
                 else:
-                    locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size).to(device)
+                    locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size, timesteps=timesteps).to(device)
                     locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
@@ -330,7 +336,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 
             else:
                 loc_end = loc_true.view(batch_size * n_nodes, args.num_timesteps, 3).transpose(0, 1).contiguous().view(-1, 3)
-                loc_pred, vel_pred, _ = model(loc, nodes, edges, edge_attr, v=vel, loc_mean=loc_mean)
+                loc_pred, vel_pred, _ = model(loc, nodes, edges, edge_attr, v=vel, loc_mean=loc_mean, rand_timesteps=timesteps)
                 #pearson_correlation_batch(loc_pred.reshape(args.num_timesteps,batch_size * n_nodes, 3),loc_end,n_nodes)
                 losses = loss_mse(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
                 losses = torch.mean(losses, dim=(1, 2))
@@ -367,9 +373,9 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         return res['loss'] / res['counter']
 
 
-def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size,variable_deltaT=False):
+def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size,variable_deltaT=False, timesteps=None):
     num_steps=10
-    
+    rand_timesteps = timesteps
     vel = v
     BN = batch_size*n_nodes
     if variable_deltaT:
@@ -400,8 +406,8 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
             vel = vel.view(steps_size[i], -1, vel.shape[-1])[-1] 
         else:
 
-            loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean)
-            
+            loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean, rand_timesteps=rand_timesteps)
+            rand_timesteps=None
             loc_preds[i] = loc
             loc = loc.view(num_steps,-1, loc.shape[-1])[-1]  #.transpose(0,1)[-1] #get last element in the inner trajectory
             vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory

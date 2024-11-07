@@ -183,7 +183,7 @@ def cumulative_random_tensor_indices_capped(N, start, end, MAX=100):
 
     return cumulative_tensor, scaled_array
 
-def random_ascending_tensor(length, min_value=1, max_value=15):
+def random_ascending_tensor(length, min_value=0, max_value=9):
     """
     Generates a random tensor of specified length, in ascending order, with no duplicates.
     

@@ -31,16 +31,16 @@ class EGNO(EGNN):
 
         self.to(self.device)
 
-    def forward(self, x, h, edge_index, edge_fea, v=None, loc_mean=None, num_timesteps=None):  # [BN, H]
+    def forward(self, x, h, edge_index, edge_fea, v=None, loc_mean=None, rand_timesteps=None):  # [BN, H]
 
-        T = self.num_timesteps if num_timesteps is None else num_timesteps
+        T = self.num_timesteps #if timesteps is None else len(timesteps)
 
         if self.num_inputs > 1 and len(x.shape) > 2:
             
             num_nodes = h[0].shape[0]
             #add also random timesteps in the range [0,9] instead of equispaced for variable dt
             if self.varDT :
-                timesteps = random_ascending_tensor(length=self.num_inputs).to(x[0])#torch.arange(T).to(x[0])
+                timesteps = rand_timesteps#random_ascending_tensor(length=self.num_inputs).to(x[0])#torch.arange(T).to(x[0])
             else:
                 timesteps = torch.linspace(0, T - 1, self.num_inputs, dtype=int).to(x[0])#torch.arange(T).to(x[0])
             t_list = [x.unsqueeze(0) for x in timesteps]#.reshape(1,)

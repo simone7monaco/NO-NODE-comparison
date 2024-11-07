@@ -100,12 +100,12 @@ class NBodyDataset():
 
 
 class NBodyDynamicsDataset(NBodyDataset):
-    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", num_timesteps=1, num_inputs=1, rollout=False, traj_len=1,variable_deltaT=False):
+    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", num_timesteps=1, num_inputs=1, rollout=False, traj_len=1,varDT=False):
         self.num_timesteps = num_timesteps
         self.rollout = rollout
         self.traj_len = traj_len
         self.num_inputs = num_inputs
-        self.var_dt = variable_deltaT
+        self.var_dt = varDT
         super(NBodyDynamicsDataset, self).__init__(partition, data_dir, max_samples, dataset_name)
 
     def __getitem__(self, i):
@@ -121,19 +121,13 @@ class NBodyDynamicsDataset(NBodyDataset):
         else:
             raise Exception("Wrong dataset partition %s" % self.dataset_name)
         
+        
+        
         if self.rollout:
-            if self.var_dt and self.num_inputs>1:
                 
-                assert self.num_inputs <= self.num_timesteps
-                idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
-                loc_inputs = loc[frame_0 + idxs]
-                vel_inputs = vel[frame_0 + idxs]
-                
-                return loc_inputs, vel_inputs, edge_attr, charges, loc
-                
-            if self.var_dt:
-                #return all locs so that after its possible to select different delta T across the trajectory
-                return loc[frame_0], vel[frame_0], edge_attr, charges, loc 
+            # if self.var_dt:
+            #     #return all locs so that after its possible to select different delta T across the trajectory
+            #     return loc[frame_0], vel[frame_0], edge_attr, charges, loc 
             
             delta_frame = frame_T - frame_0
             for i in range(self.traj_len):
@@ -181,7 +175,16 @@ class NBodyDynamicsDataset(NBodyDataset):
                 vels = [vel[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
             vels = np.stack(vels, axis=1)
 
-        if self.num_inputs > 1:
+        if self.var_dt and self.num_inputs>1:
+                
+            assert self.num_inputs <= self.num_timesteps
+            # idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
+            # loc_inputs = loc[frame_0 + idxs]
+            # vel_inputs = vel[frame_0 + idxs]
+            
+            return loc, vel, edge_attr, charges, locs
+        
+        elif self.num_inputs > 1:
             assert self.num_inputs <= self.num_timesteps
             idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
             loc_inputs = loc[frame_0 + idxs]
