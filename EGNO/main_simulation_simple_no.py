@@ -79,7 +79,9 @@ parser.add_argument('--num_timesteps', type=int, default=10,
                     help='The number of time steps.')
 parser.add_argument('--time_emb_dim', type=int, default=32,
                     help='The dimension of time embedding.')
-parser.add_argument('--num_modes', type=int, default=2,
+parser.add_argument('--num_modes', type=int, default=5,
+                    help='The number of particles.')
+parser.add_argument('--n_balls', type=int, default=2,
                     help='The number of modes.')
 
 time_exp_dic = {'time': 0, 'counter': 0}
@@ -147,16 +149,16 @@ def main():
     torch.cuda.manual_seed(seed)
 
     dataset_train = SimulationDataset(partition='train', max_samples=args.max_training_samples,
-                                      data_dir=args.data_dir, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT) #, num_inputs=args.num_inputs
+                                      data_dir=args.data_dir,n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT) #, num_inputs=args.num_inputs
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
                                                num_workers=0)
 
     dataset_val = SimulationDataset(partition='val',
-                                    data_dir=args.data_dir, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT)#num_inputs=args.num_inputs
+                                    data_dir=args.data_dir, n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT)#num_inputs=args.num_inputs
     loader_val = torch.utils.data.DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                              num_workers=0)
 
-    dataset_test = SimulationDataset(partition='test',data_dir=args.data_dir, num_timesteps=args.num_timesteps, 
+    dataset_test = SimulationDataset(partition='test',data_dir=args.data_dir, n_balls=args.n_balls, num_timesteps=args.num_timesteps, 
                                 num_inputs=args.num_inputs, rollout=args.rollout, traj_len=args.traj_len, varDT= args.varDT)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                               num_workers=0)

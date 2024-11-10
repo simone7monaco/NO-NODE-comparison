@@ -9,7 +9,7 @@ class NBodyDataset():
 
     """
 
-    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small"):
+    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small",n_balls=5):
         self.partition = partition
         self.data_dir = data_dir
         if self.partition == 'val':
@@ -20,7 +20,7 @@ class NBodyDataset():
         if dataset_name == "nbody":
             self.suffix += "_charged5_initvel1"
         elif dataset_name == "nbody_small" or dataset_name == "nbody_small_out_dist":
-            self.suffix += "_charged5_initvel1small"
+            self.suffix += f"_charged{n_balls}_initvel1small"
         else:
             raise Exception("Wrong dataset name %s" % self.dataset_name)
 
@@ -100,13 +100,13 @@ class NBodyDataset():
 
 
 class NBodyDynamicsDataset(NBodyDataset):
-    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", num_timesteps=1, num_inputs=1, rollout=False, traj_len=1,varDT=False):
+    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", n_balls=5, num_timesteps=1, num_inputs=1, rollout=False, traj_len=1,varDT=False):
         self.num_timesteps = num_timesteps
         self.rollout = rollout
         self.traj_len = traj_len
         self.num_inputs = num_inputs
         self.var_dt = varDT
-        super(NBodyDynamicsDataset, self).__init__(partition, data_dir, max_samples, dataset_name)
+        super(NBodyDynamicsDataset, self).__init__(partition, data_dir, max_samples, dataset_name, n_balls=n_balls)
 
     def __getitem__(self, i):
         loc, vel, edge_attr, charges = self.data
