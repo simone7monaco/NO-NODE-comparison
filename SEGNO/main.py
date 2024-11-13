@@ -126,9 +126,6 @@ if __name__ == "__main__":
     if args.gpus == 0:
         print('Starting training on the cpu...')
         args.mode = 'cpu'
-        params = {arg.dest.replace('-', '_'): {'value': arg.default} for arg in parser._actions if arg.dest != 'help'}
-        print(params)
-        exit()
         train(0, args)
         #wandb.finish()
     elif args.gpus == 1:
