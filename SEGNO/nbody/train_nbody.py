@@ -77,13 +77,13 @@ def train(gpu, args):
                          recurrent=True, norm_diff=False, tanh=False, use_previous_state=args.use_previous_state)
 
     dataset_train = NBodyDataset(partition='train', dataset_name=args.nbody_name,
-                                 max_samples=args.max_samples)
+                                 max_samples=args.max_samples, n_balls=args.n_balls)
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
-    dataset_val = NBodyDataset(partition='val', dataset_name=args.nbody_name)
+    dataset_val = NBodyDataset(partition='val', dataset_name=args.nbody_name,n_balls=args.n_balls)
     loader_val = torch.utils.data.DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False)
 
-    dataset_test = NBodyDataset(partition='test', dataset_name=args.nbody_name)
+    dataset_test = NBodyDataset(partition='test', dataset_name=args.nbody_name,n_balls=args.n_balls)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -118,7 +118,7 @@ def train(gpu, args):
             # print(best['long_loss'])
     
     json_object = json.dumps(results, indent=4)
-    with open("results.json", "w") as outfile:
+    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(args.varDT)+"_"+".json", "w") as outfile:
         outfile.write(json_object)
 
     traj_losses = torch.stack(best['losses'], dim=0)
