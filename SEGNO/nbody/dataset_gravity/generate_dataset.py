@@ -5,6 +5,7 @@ import argparse
 
 """
 nbody_small:   python3 -u generate_dataset.py --simulation=charged --num-train 10000 --seed 43 --suffix small
+    python -u generate_dataset.py --simulation=charged --num-train 3000 --seed 43 --suffix small --length 20000 --length_test 20000 --n_balls 20
 gravity_small: python3 -u generate_dataset.py --simulation=gravity --num-train 10000 --seed 43 --suffix small
 """
 

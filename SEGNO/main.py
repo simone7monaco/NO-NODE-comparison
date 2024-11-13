@@ -49,6 +49,8 @@ if __name__ == "__main__":
                         help='Download flag')
 
     # Nbody parameters:
+    parser.add_argument('--varDT', type=bool, default=False,
+                    help='The number of inputs to give for each prediction step.')
     parser.add_argument('--num_inputs', type=int, default=1,
                     help='The number of inputs to give for rollout training')
     parser.add_argument('--variable_deltaT', type=bool, default=False,
@@ -61,6 +63,8 @@ if __name__ == "__main__":
                         help='Delta t between each input/prediction step')
     parser.add_argument('--use_previous_state', type=bool, default=False,
                         help='If use prev state')
+    parser.add_argument('--n_balls', type=int, default=5,
+                        help='Name of nbody data [nbody, nbody_small]')
     parser.add_argument('--nbody_name', type=str, default="nbody_small",
                         help='Name of nbody data [nbody, nbody_small]')
     parser.add_argument('--max_samples', type=int, default=3000,
@@ -118,9 +122,13 @@ if __name__ == "__main__":
 #     "only_test": args.only_test
 #     })
 
+
     if args.gpus == 0:
         print('Starting training on the cpu...')
         args.mode = 'cpu'
+        params = {arg.dest.replace('-', '_'): {'value': arg.default} for arg in parser._actions if arg.dest != 'help'}
+        print(params)
+        exit()
         train(0, args)
         #wandb.finish()
     elif args.gpus == 1:

@@ -12,7 +12,7 @@ class NBodyDataset():
 
     """
 
-    def __init__(self, partition='train', max_samples=1e8, dataset_name="nbody_small"):
+    def __init__(self, partition='train', max_samples=1e8, dataset_name="nbody_small", n_balls=5):
         self.partition = partition
         if self.partition == 'val':
             self.suffix = 'valid'
@@ -22,7 +22,7 @@ class NBodyDataset():
         if dataset_name == "nbody":
             self.suffix += "_gravity5_initvel1"
         elif dataset_name == "nbody_small" or dataset_name == "nbody_small_out_dist":
-            self.suffix += "_charged5_initvel1small"
+            self.suffix += f"_charged{n_balls}_initvel1small"
         else:
             raise Exception("Wrong dataset name %s" % self.dataset_name)
 
