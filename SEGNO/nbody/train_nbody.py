@@ -68,7 +68,7 @@ def cumulative_random_tensor_indices_capped(N, start, end, MAX=100):
 
     return  cumulative_tensor,scaled_array
 
-
+varDt = False
 
 def train(gpu, args):
     if args.gpus == 0:
@@ -85,6 +85,8 @@ def train(gpu, args):
         os.makedirs(args.outf + "/" + args.exp_name)
     except OSError:
         pass
+
+    varDt = True if args.varDT and args.num_inputs>1 else False #fix
 
     model = SEGNO(in_node_nf=1, in_edge_nf=1, hidden_nf=64, device=device, n_layers=args.layers,
                          recurrent=True, norm_diff=False, tanh=False, use_previous_state=args.use_previous_state)
@@ -132,7 +134,7 @@ def train(gpu, args):
             # print(best['long_loss'])
     
     json_object = json.dumps(results, indent=4)
-    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(args.varDT)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_.json", "w") as outfile:
+    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_.json", "w") as outfile:
         outfile.write(json_object)
 
     # traj_losses = torch.stack(best['losses'], dim=0)
@@ -182,10 +184,10 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         
         if rollout:
             end = 40
-            
+            start = 30
+            steps = None
             traj_len = args.traj_len
-            if args.variable_deltaT:
-                start = 30
+            if varDt: 
                 #pass steps to rollout to call the model at each iter with the corerct T
                 indices, steps = cumulative_random_tensor_indices_capped(traj_len,5,15)#cumulative_random_tensor_indices(traj_len,1,10)
                 indices +=start
@@ -194,8 +196,12 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                 locs_true = locs[end:args.num_steps*traj_len+end:10].to(device)
             num_prev = args.num_inputs
             loc_list = []
-            for i in range(num_prev):
-                loc_list.append(locs[i*10+30]) #start from 30
+            half_step = 10
+            steps = steps if steps is not None else [half_step for _ in range(num_prev)]
+            loc_list.append(locs[start])
+            for i in range(num_prev-1):
+                loc_list.append(locs[start+steps[i]]) #start from 30
+                start += steps[i]
             locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=num_prev).to(device)
 
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
@@ -210,8 +216,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         else:
             if args.use_previous_state and not args.only_test:
                 steps = None
-                if args.variable_deltaT:
-                    start = 30
+                if varDt:
                     #pass steps to rollout to call the model at each iter with the corerct T
                     indices, steps = cumulative_random_tensor_indices_capped(traj_len,5,15)#cumulative_random_tensor_indices(args.num_inputs,1,10)
                     #indices +=start
@@ -229,7 +234,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                     preds.append(pred_x)
                     #call model again with new observed values and prev_x
                     
-                    loc, vel = locs[start+steps[i]], vels[start+steps[i]] #take sample corresponding to half the delta t (just a try)
+                    loc, vel = locs[start+steps[i]], vels[start+steps[i]] #take sample corresponding to half the delta t 
                     #loc_end = torch.cat(loc,loc_end)
                     targets.append(loc)
                     batch = torch.arange(0, batch_size)
@@ -240,7 +245,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                     rows, cols = edge_index
                     loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
                     edge_attr = loc_dist.detach()
-                    start += half_step
+                    start += steps[i]
                     #loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev_x)
                 #loc_pred = torch.cat(pred_x, loc_pred)
                 preds = torch.stack(preds)

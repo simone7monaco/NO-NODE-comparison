@@ -67,9 +67,10 @@ def train(config=None):
     # Access the hyperparameters through wandb.config
         
         config = wandb.config
-        
-        if config.num_inputs <=1:
+
+        if config.num_inputs <=1 and config.varDT:
             config.varDT = False
+            config.update({"varDT": False}, allow_val_change=True)
 
         if config.gpus == 0:
             config.mode = 'cpu'

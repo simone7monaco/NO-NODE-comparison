@@ -142,6 +142,7 @@ try:
 except OSError:
     pass
 
+varDt = False
 
 def main(config=None):
 
@@ -157,18 +158,20 @@ def main(config=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
+    varDt = True if args.varDT and args.num_inputs>1 else False
+    
     dataset_train = SimulationDataset(partition='train', max_samples=args.max_training_samples,
-                                      data_dir=args.data_dir,n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT) #, num_inputs=args.num_inputs
+                                      data_dir=args.data_dir,n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=varDt) #, num_inputs=args.num_inputs
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
                                                num_workers=0)
 
     dataset_val = SimulationDataset(partition='val',
-                                    data_dir=args.data_dir, n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT)#num_inputs=args.num_inputs
+                                    data_dir=args.data_dir, n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=varDt)#num_inputs=args.num_inputs
     loader_val = torch.utils.data.DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                              num_workers=0)
 
     dataset_test = SimulationDataset(partition='test',data_dir=args.data_dir, n_balls=args.n_balls, num_timesteps=args.num_timesteps, 
-                                num_inputs=args.num_inputs, rollout=args.rollout, traj_len=args.traj_len, varDT= args.varDT)
+                                num_inputs=args.num_inputs, rollout=args.rollout, traj_len=args.traj_len, varDT= varDt)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                               num_workers=0)
 
@@ -215,9 +218,9 @@ def main(config=None):
             if early_stopping.early_stop:
                 print("Early Stopping.")
                 break
-
+                
     json_object = json.dumps(results, indent=4)
-    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(args.varDT)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_.json", "w") as outfile:
+    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_.json", "w") as outfile:
         outfile.write(json_object)
 
         
@@ -249,7 +252,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 start = 30
                 loc = loc.transpose(0,1) #T,100,5,3
                 vel = vel.transpose(0,1)
-                if args.varDT:
+                if varDt:
                     timesteps = random_ascending_tensor(length=args.num_inputs).to(device)
                     loc = loc[start + timesteps]
                     vel = vel[start + timesteps]
