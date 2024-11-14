@@ -4,7 +4,7 @@ import os
 from torch import nn, optim
 from models.model import SEGNO
 from torch_geometric.nn import knn_graph
-from dataset_nbody import NBodyDataset #nbody.
+from dataset_nbody import NBodyDataset #from nbody.dataset_nbody import NBodyDataset
 import json
 import wandb    
 time_exp_dic = {'time': 0, 'counter': 0}
