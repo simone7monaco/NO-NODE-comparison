@@ -41,7 +41,7 @@ class SEGNO(nn.Module):
         his = self.embedding(his)
 
         #if self.variable_T:
-        self.n_layers = 7#T # *self.n_layers
+        self.n_layers = T # *self.n_layers 7
         self.module.n_layers = self.n_layers
        
             #add timestep embedding (maybe not needed)
