@@ -4,7 +4,7 @@ import os
 from torch import nn, optim
 from models.model import SEGNO
 from torch_geometric.nn import knn_graph
-from nbody.dataset_nbody import NBodyDataset
+from dataset_nbody import NBodyDataset #nbody.
 import json
 import wandb    
 time_exp_dic = {'time': 0, 'counter': 0}
@@ -273,10 +273,10 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
     print('%s epoch %d avg loss: %.5f avg num steps %.4f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter'], res['avg_num_steps']))
     avg_loss = res['loss'] / res['counter']
     if rollout:
-        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
         return res['loss'] / res['counter'], res
     else:
-        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
         return res['loss'] / res['counter'], res
 
 

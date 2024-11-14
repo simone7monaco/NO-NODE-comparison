@@ -7,7 +7,7 @@ param_dicts = {
         'value': 100
     }, 
     'epochs': {
-        'value': 5 #00
+        'value': 500
         }, 
     'no_cuda': {
         'value': False
@@ -19,7 +19,7 @@ param_dicts = {
         'value': 1
         }, 
     'test_interval': {
-        'value': 4#5
+        'value': 5
         }, 
     'outf': {
         'value': 'exp_results'
@@ -65,16 +65,16 @@ param_dicts = {
         'value': 1e-12
         }, 
     'lr': {
-        'values': [0.0005,0.0001,0.00005]
+        'values': [0.0005,0.00005]
         }, 
     'nf': {
         'value': 64
         }, 
     'n_layers': {
-        'value': 4
+        'values': [3,4,5]
         }, 
     'varDT': {
-        'value': False  #check constraint on num_inputs
+        'values': [False, True]  #check constraint on num_inputs
         }, 
     'rollout': {
         'value': True
@@ -83,10 +83,10 @@ param_dicts = {
         'value': False
         }, 
     'only_test': {
-        'value': True  #check code
+        'value': False 
         }, 
     'num_inputs': {
-        'value': 1
+        'values': [1,2,3,4]
         },
     'traj_len': {
         'value': 10   #static?
@@ -101,4 +101,4 @@ param_dicts = {
         'value': 5
         },
     'n_balls': {
-        'value': 5}}  #3/5/8/20/50
+        'values': [3,20,50]}}  #3/5/8/20/50

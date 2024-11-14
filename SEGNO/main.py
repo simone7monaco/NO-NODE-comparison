@@ -39,6 +39,10 @@ if __name__ == "__main__":
                         help='Num workers in dataloader')
     parser.add_argument('--save_dir', type=str, default="saved models",
                         help='Directory in which to save models')
+    
+    parser.add_argument('--outf', type=str, default='exp_results', metavar='N',
+                    help='folder to output the json log file')
+    parser.add_argument('--exp_name', type=str, default='exp_1', metavar='N', help='experiment_name')
 
     # Data parameters
     parser.add_argument('--dataset', type=str, default="qm9",

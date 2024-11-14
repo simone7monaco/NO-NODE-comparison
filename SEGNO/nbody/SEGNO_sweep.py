@@ -10,45 +10,6 @@ MAX_RUN = 50
 wandb.login()
 
 
-#            config={
-#     "learning_rate": args.lr,
-#     "weight_decay": args.weight_decay,
-#     "hidden_dim": args.nf,
-#     "dropout": args.dropout,
-#     "batch_size": args.batch_size,
-#     "epochs": args.epochs,
-#     "model": args.model,
-#     "nlayers": args.n_layers,  
-#     "time_emb_dim": args.time_emb_dim,
-#     "num_modes": args.num_modes,  
-#     "rollout": args.rollout,  
-#     "num_timesteps": args.num_timesteps,
-#     "num_inputs": args.num_inputs,
-#     "only_test": args.only_test,
-#     "varDT": args.varDT,
-#     "variable_deltaT": args.variable_deltaT
-#     })
-
-parameters_dict = {
-        'lr': {
-            'values': [0.01, 0.001, 0.0001]
-        },
-        'batch_size': {
-            'values': [16, 32, 64]
-        },
-        'epochs': {
-            'value': 500
-        },
-        'exp_name': {
-            'value': "exp_r"
-        },
-        'no-cuda': {
-            'value': False
-        },
-
-
-    }
-
 sweep_config = {
     'method': 'grid',  # or 'random'
     'metric': {
@@ -68,9 +29,9 @@ def train(config=None):
         
         config = wandb.config
 
-        if config.num_inputs <=1 and config.varDT:
-            config.varDT = False
-            config.update({"varDT": False}, allow_val_change=True)
+        # if config.num_inputs <=1 and config.varDT:
+        #     config.varDT = False
+        #     config.update({"varDT": False}, allow_val_change=True)
 
         if config.gpus == 0:
             config.mode = 'cpu'
@@ -82,4 +43,4 @@ def train(config=None):
         
 
 sweep_id = wandb.sweep(sweep_config, project="SEGNO-sweep-test")
-wandb.agent(sweep_id, train, count=3) #MAX_RUN
+wandb.agent(sweep_id, train) #MAX_RUN

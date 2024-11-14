@@ -7,7 +7,7 @@ param_dicts = {
         'value': 100
     }, 
     'epochs': {
-        'value': 5 #00
+        'value': 500
         }, 
     'no_cuda': {
         'value': False
@@ -34,7 +34,7 @@ param_dicts = {
         'value': False
         },
     'test_interval': {
-        'value': 4#5
+        'value': 5
         }, 
     'time_exp': {
         'value': False
@@ -85,7 +85,7 @@ param_dicts = {
         'value': "linear"
         }, 
     'gpus': {
-        'value': 0 #change for gpu
+        'value': 1 #change for gpu
         }, 
     'subspace_type': {
         'value': "weightbalanced"
@@ -98,7 +98,7 @@ param_dicts = {
         'value': 1e-12
         }, 
     'lr': {
-        'values': [0.0005,0.0001,0.00005]
+        'values': [0.0005,0.00005]
         }, 
     'hidden_features': {
         'value': 128
@@ -122,19 +122,19 @@ param_dicts = {
         'value': False
         }, 
     'only_test': {
-        'value': True  #check code
+        'values': [True, False]  
         }, 
     'num_inputs': {
-        'value': 1
+        'values': [1,2,3,4]
         },
     'traj_len': {
-        'value': 10   #static?
+        'value': 10  
         }, 
     'num_steps': {
         'value': 10
         }, 
     'use_previous_state': {
-        'value': False
+        'values': [False, True]
         },
     'n_balls': {
-        'value': 5}}  #3/5/8/20/50
+        'values': [3,20,50]}}  #3/5/8/20/50
