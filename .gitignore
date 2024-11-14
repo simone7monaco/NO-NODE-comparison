@@ -1,3 +1,6 @@
 newvenv/
 EGNO/wandb
 SEGNO/wandb
+wandb/
+t_wandb/
+myenv1/
