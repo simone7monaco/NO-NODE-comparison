@@ -81,10 +81,13 @@ parser.add_argument('--time_emb_dim', type=int, default=32,
                     help='The dimension of time embedding.')
 parser.add_argument('--num_modes', type=int, default=5,
                     help='The number of particles.')
-parser.add_argument('--n_balls', type=int, default=2,
+parser.add_argument('--n_balls', type=int, default=5,
                     help='The number of modes.')
 
 time_exp_dic = {'time': 0, 'counter': 0}
+
+# Build the dictionary from the parser arguments
+#params = {arg.dest.replace('-', '_'): {'value': arg.default} for arg in parser._actions if arg.dest != 'help'}
 
 
 args = parser.parse_args()
@@ -140,8 +143,14 @@ except OSError:
     pass
 
 
-def main():
-    # fix seed
+def main(config=None):
+
+    #if wandb sweep use config
+    if config is not None:
+        args = config
+        args.cuda = not args.no_cuda and torch.cuda.is_available()
+        device = torch.device("cuda" if args.cuda else "cpu")
+        
     seed = args.seed
     random.seed(seed)
     np.random.seed(seed)
@@ -208,7 +217,7 @@ def main():
                 break
 
     json_object = json.dumps(results, indent=4)
-    with open(args.outf + "/" + args.exp_name + "/loss.json", "w") as outfile:
+    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(args.varDT)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_.json", "w") as outfile:
         outfile.write(json_object)
 
         
@@ -234,9 +243,9 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         optimizer.zero_grad()
 
         if args.model == 'egno':
-
+            timesteps = None
             if args.num_inputs > 1 : #and rollout
-                timesteps = None
+                
                 start = 30
                 loc = loc.transpose(0,1) #T,100,5,3
                 vel = vel.transpose(0,1)
@@ -368,10 +377,10 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     
 
     if rollout:
-        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
         return res['loss'] / res['counter'], res['avg_num_steps'], res['losses']
     else:
-        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
         return res['loss'] / res['counter']
 
 

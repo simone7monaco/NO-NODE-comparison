@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import os
 from torch import nn, optim
 from models.model import SEGNO
 from torch_geometric.nn import knn_graph
@@ -67,11 +68,23 @@ def cumulative_random_tensor_indices_capped(N, start, end, MAX=100):
 
     return  cumulative_tensor,scaled_array
 
+
+
 def train(gpu, args):
     if args.gpus == 0:
         device = 'cpu'
     else:
         device = torch.device('cuda:' + str(gpu))
+    
+    try:
+        os.makedirs(args.outf)
+    except OSError:
+        pass
+
+    try:
+        os.makedirs(args.outf + "/" + args.exp_name)
+    except OSError:
+        pass
 
     model = SEGNO(in_node_nf=1, in_edge_nf=1, hidden_nf=64, device=device, n_layers=args.layers,
                          recurrent=True, norm_diff=False, tanh=False, use_previous_state=args.use_previous_state)
@@ -89,7 +102,7 @@ def train(gpu, args):
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     loss_mse = nn.MSELoss()
     loss_mse_no_red = nn.MSELoss(reduction='none')
-    results = {'eval epoch': [], 'val loss': [], 'test loss': [], 'train loss': []}
+    results = {'eval epoch': [], 'val loss': [], 'test loss': [], 'train loss': [],'traj_loss':[]}
     best_val_loss = 1e8
     best_test_loss = 1e8
     best_epoch = 0
@@ -107,6 +120,7 @@ def train(gpu, args):
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
             results['test loss'].append(test_loss)
+            results['traj_loss'].append(res['losses'])
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -118,11 +132,11 @@ def train(gpu, args):
             # print(best['long_loss'])
     
     json_object = json.dumps(results, indent=4)
-    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(args.varDT)+"_"+".json", "w") as outfile:
+    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(args.varDT)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_.json", "w") as outfile:
         outfile.write(json_object)
 
-    traj_losses = torch.stack(best['losses'], dim=0)
-    torch.save(traj_losses,'traj_losses.pt')
+    # traj_losses = torch.stack(best['losses'], dim=0)
+    # torch.save(traj_losses,'traj_losses.pt')
 
     return best_val_loss, best_test_loss, best_epoch
 
@@ -192,7 +206,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             losses = loss_mse_no_red(locs_pred, locs_true).view(traj_len, batch_size * n_nodes, 3)
             losses = torch.mean(losses, dim=(1, 2))
             loss = torch.mean(losses)
-            res['losses'].append(losses)
+            res['losses'].append(losses.cpu().tolist())
         else:
             if args.use_previous_state and not args.only_test:
                 steps = None

@@ -1,5 +1,6 @@
 newvenv/
 EGNO/wandb
+EGNO/simulation/dataset/simple
 SEGNO/wandb
 wandb/
 t_wandb/
