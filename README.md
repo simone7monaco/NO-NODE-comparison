@@ -14,3 +14,7 @@ from:  "SEGNO\nbody\dataset_gravity" folder run command: "python -u generate_dat
 - dataset should be in "SEGNO\nbody\dataset_gravity"
 - from: "SEGNO\nbody" folder run the command: "python SEGNO_sweep.py"
 - in "SEGNO\nbody\sweep_params.py" are saved the parameters configuration for the sweep
+
+# WANDB key for login: 
+
+d8446caf4ba3380287984852fefa3ca3557b664d
