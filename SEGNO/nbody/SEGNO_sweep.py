@@ -42,5 +42,5 @@ def train(config=None):
             train_model(0, config)
         
 
-sweep_id = wandb.sweep(sweep_config, project="SEGNO-sweep-test")
+sweep_id = wandb.sweep(sweep_config, project="SEGNO-sweep")
 wandb.agent(sweep_id, train) #MAX_RUN
