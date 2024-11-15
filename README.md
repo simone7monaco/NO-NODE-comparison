@@ -5,13 +5,13 @@ from:  "SEGNO\nbody\dataset_gravity" folder run command: "python -u generate_dat
 
 ### EGNO
 
-- dataset should be in "EGNO\simple"
+- dataset should be in "EGNO\simple" (unzipped with all the files in \simple)
 - from: "EGNO" folder run the command: "python EGNO_sweep.py"
 - in "SEGNO\nbody\sweep_params.py" are saved the parameters configuration for the sweep
 
 ### SEGNO
 
-- dataset should be in "SEGNO\nbody\dataset_gravity"
+- dataset should be in "SEGNO\nbody\dataset_gravity" (unzipped with all the files in \simple)
 - from: "SEGNO\nbody" folder run the command: "python SEGNO_sweep.py"
 - in "SEGNO\nbody\sweep_params.py" are saved the parameters configuration for the sweep
 
