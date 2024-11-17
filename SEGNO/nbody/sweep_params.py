@@ -137,4 +137,4 @@ param_dicts = {
         'values': [False, True]
         },
     'n_balls': {
-        'values': [3,20,50]}}  #3/5/8/20/50
+        'values': [5,20,50]}}  #3/5/8/20/50
