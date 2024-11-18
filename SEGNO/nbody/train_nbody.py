@@ -4,7 +4,6 @@ import os
 from torch import nn, optim
 from models.model import SEGNO
 from torch_geometric.nn import knn_graph
-from dataset_nbody import NBodyDataset #from nbody.dataset_nbody import NBodyDataset
 import json
 import wandb    
 time_exp_dic = {'time': 0, 'counter': 0}
@@ -193,7 +192,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                 indices +=start
                 locs_true = locs[indices].to(device)
             else:
-                locs_true = locs[end:args.num_steps*traj_len+end:10].to(device)
+                locs_true = locs[end:args.num_steps*traj_len+end:args.num_steps].to(device)
             num_prev = args.num_inputs
             loc_list = []
             half_step = 10
@@ -202,7 +201,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             for i in range(num_prev-1):
                 loc_list.append(locs[start+steps[i]]) #start from 30
                 start += steps[i]
-            locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len, num_prev=num_prev).to(device)
+            locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len,num_steps=args.num_steps, num_prev=num_prev).to(device)
 
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
@@ -222,7 +221,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                     #indices +=start
                     #locs_true = locs[indices].to(device)
                 start = 30
-                half_step = 10
+                half_step = args.num_steps
                 steps = steps if steps is not None else [half_step for _ in range(args.num_inputs)]
                 prev_x = None
                 preds = []
@@ -280,9 +279,9 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         return res['loss'] / res['counter'], res
 
 
-def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len, num_prev=1):
+def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len,num_steps=10, num_prev=1):
 
-    step = 10
+    step = num_steps
     vel = v
     prev = None
     prevs = 0

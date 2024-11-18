@@ -131,7 +131,7 @@ param_dicts = {
         'value': 10  
         }, 
     'num_steps': {
-        'value': 10
+        'values': [2,5,10]
         }, 
     'use_previous_state': {
         'values': [False, True]

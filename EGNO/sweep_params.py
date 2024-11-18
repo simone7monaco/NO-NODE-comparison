@@ -92,7 +92,7 @@ param_dicts = {
         'value': 10   #static?
         }, 
     'num_timesteps': {
-        'value': 10
+        'values': [2,5,10]
         }, 
     'time_emb_dim': {
         'value': 32

@@ -324,7 +324,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                     locs_true = loc_true[start:end] #.view(batch_size * n_nodes, steps[-1], 3).transpose(0, 1)
                     
                 else:
-                    locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size, timesteps=timesteps).to(device)
+                    locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,num_steps=args.num_timesteps, timesteps=timesteps).to(device)
                     locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
@@ -387,8 +387,8 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         return res['loss'] / res['counter']
 
 
-def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size,variable_deltaT=False, timesteps=None):
-    num_steps=10
+def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size,num_steps=10,variable_deltaT=False, timesteps=None):
+    
     rand_timesteps = timesteps
     vel = v
     BN = batch_size*n_nodes
