@@ -100,7 +100,7 @@ class NBodyDataset():
 
 
 class NBodyDynamicsDataset(NBodyDataset):
-    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", n_balls=5, num_timesteps=1, num_inputs=1, rollout=False, traj_len=1,varDT=False):
+    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small", n_balls=5, num_timesteps=10, num_inputs=1, rollout=False, traj_len=1,varDT=False):
         self.num_timesteps = num_timesteps
         self.rollout = rollout
         self.traj_len = traj_len
@@ -121,7 +121,7 @@ class NBodyDynamicsDataset(NBodyDataset):
         else:
             raise Exception("Wrong dataset partition %s" % self.dataset_name)
         
-        
+        frame_T = frame_0 + self.num_timesteps
         
         if self.rollout:
                 

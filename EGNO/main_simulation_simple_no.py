@@ -147,10 +147,10 @@ varDt = False
 def main(config=None):
 
     #if wandb sweep use config
-    if config is not None:
-        args = config
-        args.cuda = not args.no_cuda and torch.cuda.is_available()
-        device = torch.device("cuda" if args.cuda else "cpu")
+    # if config is not None:
+    #     args = config
+    #     args.cuda = not args.no_cuda and torch.cuda.is_available()
+    #     device = torch.device("cuda" if args.cuda else "cpu")
         
     seed = args.seed
     random.seed(seed)
@@ -159,7 +159,7 @@ def main(config=None):
     torch.cuda.manual_seed(seed)
 
     varDt = True if args.varDT and args.num_inputs>1 else False
-
+    
     dataset_train = SimulationDataset(partition='train', max_samples=args.max_training_samples,
                                       data_dir=args.data_dir,n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=varDt) #, num_inputs=args.num_inputs
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
@@ -174,7 +174,7 @@ def main(config=None):
                                 num_inputs=args.num_inputs, rollout=args.rollout, traj_len=args.traj_len, varDT= varDt)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                               num_workers=0)
-
+    
     if args.model == 'egno':
         model = EGNO(n_layers=args.n_layers, in_node_nf=1, in_edge_nf=2, hidden_nf=args.nf, device=device,
                      with_v=True, flat=args.flat, activation=nn.SiLU(), norm=args.norm, use_time_conv=True,
@@ -240,7 +240,8 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[B, 5, T, 3]
-          #loc.shape : [B, num_inputs, 5, 3]
+         #loc.shape : [B, num_inputs, 5, 3]
+        
         n_nodes = 5
         
         optimizer.zero_grad()
@@ -252,8 +253,9 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 start = 30
                 loc = loc.transpose(0,1) #T,100,5,3
                 vel = vel.transpose(0,1)
-                if varDt:
-                    timesteps = random_ascending_tensor(length=args.num_inputs).to(device)
+                
+                if args.varDT:
+                    timesteps = random_ascending_tensor(length=args.num_inputs, max_value=args.num_timesteps-1).to(device)
                     loc = loc[start + timesteps]
                     vel = vel[start + timesteps]
                 
@@ -329,7 +331,10 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
                 #print(first_invalid_idx)
-                sup = first_invalid_idx if first_invalid_idx > 15 else 20
+                num_elements = int(0.4 * args.traj_len*args.num_timesteps)  # Calculate 40% of the total elements
+                if args.traj_len*args.num_timesteps >= 50:
+                    num_elements = 20
+                sup = first_invalid_idx if first_invalid_idx > 15 else num_elements
                 
                 locs_pred = locs_pred[:sup]
                 locs_true = locs_true[:sup]
@@ -345,6 +350,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
                 #print(losses,torch.max(losses))
+                
                 res['losses'].append(losses.cpu().tolist())
                 loss = torch.mean(losses) 
                 
@@ -394,7 +400,7 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
     BN = batch_size*n_nodes
     if variable_deltaT:
     #   calculate random indices
-        steps, steps_size = cumulative_random_tensor_indices_capped(N=traj_len,start=5,end=15)
+        steps, steps_size = cumulative_random_tensor_indices_capped(N=traj_len,start=1,end=num_steps+3, MAX=num_steps*traj_len)
         tot_num_step = steps[-1] 
         #change shape of loc preds
         loc_preds = torch.zeros((tot_num_step*BN,3))
@@ -466,8 +472,9 @@ def pearson_correlation_batch(x, y, N):
     """
     
     # Reshape to (B, T, N*3) 
-    cut = 40 # to avoid NaN values
+    
     T = x.shape[0] 
+    cut = int(0.4 * T)  # Calculate 40% of the total elements to avoid NaN values
     B = x.size(1) // N
     x = x.reshape( T, B, -1)[:cut].transpose(0,1)  # Flatten N and 3 into a single dimension
     y = y.reshape( T, B, -1)[:cut].transpose(0,1)

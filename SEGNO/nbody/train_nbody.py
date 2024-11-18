@@ -4,6 +4,7 @@ import os
 from torch import nn, optim
 from models.model import SEGNO
 from torch_geometric.nn import knn_graph
+from dataset_nbody import NBodyDataset #from nbody.dataset_nbody import NBodyDataset
 import json
 import wandb    
 time_exp_dic = {'time': 0, 'counter': 0}
@@ -182,20 +183,21 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         edge_attr = loc_dist.detach()
         
         if rollout:
-            end = 40
+            
             start = 30
+            end = start + args.num_steps
             steps = None
             traj_len = args.traj_len
             if varDt: 
                 #pass steps to rollout to call the model at each iter with the corerct T
-                indices, steps = cumulative_random_tensor_indices_capped(traj_len,5,15)#cumulative_random_tensor_indices(traj_len,1,10)
+                indices, steps = cumulative_random_tensor_indices_capped(N=traj_len,start=1,end=args.num_steps+3, MAX=args.num_steps*traj_len)#cumulative_random_tensor_indices(traj_len,1,10)
                 indices +=start
                 locs_true = locs[indices].to(device)
             else:
                 locs_true = locs[end:args.num_steps*traj_len+end:args.num_steps].to(device)
             num_prev = args.num_inputs
             loc_list = []
-            half_step = 10
+            half_step = args.num_steps
             steps = steps if steps is not None else [half_step for _ in range(num_prev)]
             loc_list.append(locs[start])
             for i in range(num_prev-1):
@@ -217,7 +219,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                 steps = None
                 if varDt:
                     #pass steps to rollout to call the model at each iter with the corerct T
-                    indices, steps = cumulative_random_tensor_indices_capped(traj_len,5,15)#cumulative_random_tensor_indices(args.num_inputs,1,10)
+                    indices, steps = cumulative_random_tensor_indices_capped(N=traj_len,start=1,end=args.num_steps+3, MAX=args.num_steps*traj_len)#cumulative_random_tensor_indices(args.num_inputs,1,10)
                     #indices +=start
                     #locs_true = locs[indices].to(device)
                 start = 30

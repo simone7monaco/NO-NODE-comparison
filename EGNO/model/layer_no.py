@@ -95,11 +95,14 @@ class SpectralConv1d(nn.Module):
 
     def forward(self, x):
         T, N, C = x.shape
+        #print(x.shape) 5,500,64
         # Compute Fourier coeffcients up to factor of e^(- something constant)
         with torch.cuda.amp.autocast(enabled=False):
         # with torch.autocast(device_type='cuda', enabled=False):
             x_ft = torch.fft.rfftn(x.float(), dim=[0])
             # Multiply relevant Fourier modes
+            #print(x_ft.shape) 3,500,64
+            #print(x_ft[:self.modes1].shape,torch.view_as_complex(self.weights1).shape)
             out_ft = compl_mul1d(x_ft[:self.modes1], torch.view_as_complex(self.weights1))
             # Return to physical space
             x = torch.fft.irfftn(out_ft, s=[T], dim=[0])

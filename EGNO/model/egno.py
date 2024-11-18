@@ -21,7 +21,8 @@ class EGNO(EGNN):
         self.num_timesteps = num_timesteps
         self.device = device
         self.hidden_nf = hidden_nf
-
+        num_modes = min(num_timesteps,num_modes) if num_timesteps != 5 else min(num_modes,3)
+        print(num_modes, num_timesteps)
         if use_time_conv:
             self.time_conv_modules = nn.ModuleList()
             self.time_conv_x_modules = nn.ModuleList()
@@ -34,7 +35,7 @@ class EGNO(EGNN):
     def forward(self, x, h, edge_index, edge_fea, v=None, loc_mean=None, rand_timesteps=None):  # [BN, H]
 
         T = self.num_timesteps #if timesteps is None else len(timesteps)
-
+        
         if self.num_inputs > 1 and len(x.shape) > 2:
             
             num_nodes = h[0].shape[0]
