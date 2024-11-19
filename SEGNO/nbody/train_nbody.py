@@ -151,7 +151,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
 
     res = {'epoch': epoch, 'loss': 0, 'losses': [], "tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'long_loss': {}}
     criterion, loss_mse_no_red = criterion[0], criterion[1]
-    n_nodes = 5
+    n_nodes = args.n_balls
     batch_size = args.batch_size
 
     for batch_idx, data in enumerate(loader):
@@ -171,7 +171,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                 
 
         locs, vels, loc_ends = data   #locs shape: [519, 500, 3] (T,BN,3)
-        loc, loc_end, vel = locs[30], locs[40], vels[30]
+        start = 30
+        loc, loc_end, vel = locs[30], locs[start+args.num_steps], vels[30]
         
         batch = torch.arange(0, batch_size)
         batch = batch.repeat_interleave(n_nodes).long().to(device)
