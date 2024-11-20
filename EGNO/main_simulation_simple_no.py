@@ -242,7 +242,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[B, 5, T, 3]
          #loc.shape : [B, num_inputs, 5, 3]
         
-        n_nodes = 5
+        n_nodes = args.n_balls
         
         optimizer.zero_grad()
 
