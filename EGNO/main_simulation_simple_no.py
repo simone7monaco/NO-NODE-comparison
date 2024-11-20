@@ -147,10 +147,10 @@ varDt = False
 def main(config=None):
 
     #if wandb sweep use config
-    # if config is not None:
-    #     args = config
-    #     args.cuda = not args.no_cuda and torch.cuda.is_available()
-    #     device = torch.device("cuda" if args.cuda else "cpu")
+    if config is not None:
+        args = config
+        args.cuda = not args.no_cuda and torch.cuda.is_available()
+        device = torch.device("cuda" if args.cuda else "cpu")
         
     seed = args.seed
     random.seed(seed)
