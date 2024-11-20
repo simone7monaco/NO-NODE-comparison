@@ -152,6 +152,7 @@ def main(config=None):
         args.cuda = not args.no_cuda and torch.cuda.is_available()
         device = torch.device("cuda" if args.cuda else "cpu")
         
+    print(args)
     seed = args.seed
     random.seed(seed)
     np.random.seed(seed)
@@ -193,7 +194,7 @@ def main(config=None):
     best_test_loss = 1e8
     best_epoch = 0
     best_train_loss = 1e8
-    print(args.rollout,args.num_inputs,args.varDT)
+    print(args.rollout,args.num_inputs,args.varDT, args.n_balls)
     for epoch in range(0, args.epochs):
         train_loss = train(model, optimizer, epoch, loader_train,args)
         results['train loss'].append(train_loss)
@@ -243,7 +244,6 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
          #loc.shape : [B, num_inputs, 5, 3]
         
         n_nodes = args.n_balls
-        
         optimizer.zero_grad()
 
         if args.model == 'egno':
