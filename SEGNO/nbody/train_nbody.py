@@ -87,7 +87,7 @@ def train(gpu, args):
         pass
 
     varDt = True if args.varDT and args.num_inputs>1 else False #fix
-
+    print(args)
     model = SEGNO(in_node_nf=1, in_edge_nf=1, hidden_nf=64, device=device, n_layers=args.layers,
                          recurrent=True, norm_diff=False, tanh=False, use_previous_state=args.use_previous_state)
 
@@ -153,7 +153,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
     criterion, loss_mse_no_red = criterion[0], criterion[1]
     n_nodes = args.n_balls
     batch_size = args.batch_size
-
+    print(f"n nodes: {n_nodes}")
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         for i in range(len(data)):
@@ -173,11 +173,12 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         locs, vels, loc_ends = data   #locs shape: [519, 500, 3] (T,BN,3)
         start = 30
         loc, loc_end, vel = locs[30], locs[start+args.num_steps], vels[30]
-        
+        print(loc.shape)
         batch = torch.arange(0, batch_size)
         batch = batch.repeat_interleave(n_nodes).long().to(device)
         
         edge_index = knn_graph(loc, 4, batch)
+        print(f"edge index shape :{edge_index.shape}")
         h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
         rows, cols = edge_index
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
