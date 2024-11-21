@@ -173,12 +173,12 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         locs, vels, loc_ends = data   #locs shape: [519, 500, 3] (T,BN,3)
         start = 30
         loc, loc_end, vel = locs[30], locs[start+args.num_steps], vels[30]
-        print(loc.shape)
+        #print(loc.shape)
         batch = torch.arange(0, batch_size)
         batch = batch.repeat_interleave(n_nodes).long().to(device)
         
         edge_index = knn_graph(loc, 4, batch)
-        print(f"edge index shape :{edge_index.shape}")
+        #print(f"edge index shape :{edge_index.shape}")
         h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
         rows, cols = edge_index
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
