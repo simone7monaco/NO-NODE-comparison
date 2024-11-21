@@ -246,7 +246,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
         
         n_nodes = args.n_balls
         optimizer.zero_grad()
-        print(n_nodes)
+        
         if args.model == 'egno':
             timesteps = None
             if args.num_inputs > 1 : #and rollout

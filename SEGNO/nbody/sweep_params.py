@@ -133,8 +133,5 @@ param_dicts = {
     'num_steps': {
         'values': [2,5,10]
         }, 
-    'use_previous_state': {
-        'values': [False, True]
-        },
     'n_balls': {
         'values': [5,20,50]}}  #3/5/8/20/50

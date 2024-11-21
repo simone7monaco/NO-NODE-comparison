@@ -134,7 +134,7 @@ def train(gpu, args):
             # print(best['long_loss'])
     
     json_object = json.dumps(results, indent=4)
-    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_.json", "w") as outfile:
+    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_onlytest="+str(args.only_test)+"_.json", "w") as outfile:
         outfile.write(json_object)
 
     # traj_losses = torch.stack(best['losses'], dim=0)
@@ -217,7 +217,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             loss = torch.mean(losses)
             res['losses'].append(losses.cpu().tolist())
         else:
-            if args.use_previous_state and not args.only_test:
+            if args.num_inputs>1 and not args.only_test:
                 steps = None
                 if varDt:
                     #pass steps to rollout to call the model at each iter with the corerct T
