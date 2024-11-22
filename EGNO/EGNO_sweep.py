@@ -36,6 +36,6 @@ def train(config=None):
         main(config)
         
 
-sweep_id = wandb.sweep(sweep_config, project="EGNO-sweep")
 wandb.agent(sweep_id, train) #MAX_RUN
+sweep_id = wandb.sweep(sweep_config, project="EGNO-sweep-new")
 
