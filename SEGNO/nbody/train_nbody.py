@@ -86,10 +86,10 @@ def train(gpu, args):
     except OSError:
         pass
 
-    varDt = True if args.varDT and args.num_inputs>1 else False #fix
+    varDt = args.varDT#True if args.varDT and args.num_inputs>1 else False #fix
     print(args)
     model = SEGNO(in_node_nf=1, in_edge_nf=1, hidden_nf=64, device=device, n_layers=args.layers,
-                         recurrent=True, norm_diff=False, tanh=False, use_previous_state=args.use_previous_state)
+                         recurrent=True, norm_diff=False, tanh=False, use_previous_state=args.num_inputs, variableDT=args.varDT)
 
     dataset_train = NBodyDataset(partition='train', dataset_name=args.nbody_name,
                                  max_samples=args.max_samples, n_balls=args.n_balls)
@@ -109,7 +109,7 @@ def train(gpu, args):
     best_test_loss = 1e8
     best_epoch = 0
     best = {'long_loss': {}}
-    print(args.use_previous_state,args.num_inputs,args.only_test)
+    print(args.varDT,args.num_inputs,args.only_test)
     for epoch in range(0, args.epochs):
         train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args, use_previous_state=args.use_previous_state)
         results['train loss'].append(train_loss)
@@ -134,7 +134,7 @@ def train(gpu, args):
             # print(best['long_loss'])
     
     json_object = json.dumps(results, indent=4)
-    with open(args.outf + "/" + args.exp_name + "/loss"+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_onlytest="+str(args.only_test)+"_.json", "w") as outfile:
+    with open(args.outf + "/" + args.exp_name + "/loss"+"_seed="+str(args.seed)+"_n_part="+str(args.n_balls)+"_n_steps="+str(args.num_steps)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_lr"+str(args.lr)+"_wd"+str(args.weight_decay)+"_onlytest="+str(args.only_test)+"_.json", "w") as outfile:
         outfile.write(json_object)
 
     # traj_losses = torch.stack(best['losses'], dim=0)

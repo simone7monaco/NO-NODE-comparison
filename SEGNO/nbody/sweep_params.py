@@ -113,7 +113,7 @@ param_dicts = {
         'value': 1
         }, 
     'varDT': {
-        'value': False  #check constraint on num_inputs
+        'values': [False, True]
         }, 
     'rollout': {
         'value': True
@@ -125,7 +125,7 @@ param_dicts = {
         'values': [True, False]  
         }, 
     'num_inputs': {
-        'values': [1,2,3,4]
+        'values': [1,2,3]
         },
     'traj_len': {
         'value': 10  
@@ -134,4 +134,4 @@ param_dicts = {
         'values': [2,5,10]
         }, 
     'n_balls': {
-        'values': [5,20,50]}}  #3/5/8/20/50
+        'values': [5]}}  #3/5/8/20/50

@@ -32,7 +32,10 @@ def train(config=None):
         if config.num_inputs <=1 and config.varDT:
             config.varDT = False
             config.update({"varDT": False}, allow_val_change=True)
-
+        elif config.num_inputs > config.num_timesteps:
+            config.num_inputs = 1
+            config.update({"num_inputs": 1}, allow_val_change=True)
+            
         main(config)
         
 
