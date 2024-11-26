@@ -11,7 +11,7 @@ import wandb
 import pickle
 time_exp_dic = {'time': 0, 'counter': 0}
 
-torch.manual_seed(40)
+#torch.manual_seed(40)
 
 def cumulative_random_tensor_indices(n, start, end):
     # Generate the cumulative numpy array as before
@@ -87,7 +87,11 @@ def train(gpu, args):
         os.makedirs(args.outf + "/" + args.exp_name)
     except OSError:
         pass
-
+    seed = args.seed
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    
     varDt = args.varDT#True if args.varDT and args.num_inputs>1 else False #fix
     print(args)
 
