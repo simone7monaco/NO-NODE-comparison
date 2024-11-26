@@ -11,6 +11,7 @@ import json
 
 import random
 import numpy as np
+import pickle
 import wandb
 
 
@@ -152,7 +153,7 @@ def main(config=None):
     #     args = config
     #     args.cuda = not args.no_cuda and torch.cuda.is_available()
     #     device = torch.device("cuda" if args.cuda else "cpu")
-
+    
     print(args)
     seed = args.seed
     random.seed(seed)
@@ -161,7 +162,7 @@ def main(config=None):
     torch.cuda.manual_seed(seed)
 
     varDt = True if args.varDT and args.num_inputs>1 else False
-    
+
     dataset_train = SimulationDataset(partition='train', max_samples=args.max_training_samples,
                                       data_dir=args.data_dir,n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=varDt) #, num_inputs=args.num_inputs
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
@@ -201,30 +202,41 @@ def main(config=None):
         results['train loss'].append(train_loss)
         if (epoch +1) % args.test_interval == 0:
             val_loss = train(model, optimizer, epoch, loader_val,args, backprop=False)
-            test_loss, avg_num_steps, losses = train(model, optimizer, epoch, loader_test,args, backprop=False, rollout=args.rollout)
+            
 
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
-            results['test loss'].append(test_loss)
-            results['traj_loss'].append(losses)
+            
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                best_test_loss = test_loss
+                #best_test_loss = test_loss
                 best_train_loss = train_loss
-                best_avg_num_steps = avg_num_steps
+                #best_avg_num_steps = avg_num_steps
                 best_epoch = epoch
                 # Save model is move to early stopping.
-            print("*** Best Val Loss: %.5f \t Best Test Loss: %.5f \t Best Test avg num steps: %.4f \t Best epoch %d"
-                  % (best_val_loss, best_test_loss, best_avg_num_steps, best_epoch))
+            print("*** Best Val Loss: %.5f \t  Best epoch %d"
+                  % (best_val_loss, best_epoch))
             early_stopping(val_loss, model)
             if early_stopping.early_stop:
                 print("Early Stopping.")
                 break
-                
+    
+    model = EGNO(n_layers=args.n_layers, in_node_nf=1, in_edge_nf=2, hidden_nf=args.nf, device=device,
+                     with_v=True, flat=args.flat, activation=nn.SiLU(), norm=args.norm, use_time_conv=True,
+                     num_modes=args.num_modes, num_timesteps=args.num_timesteps, time_emb_dim=args.time_emb_dim, num_inputs=args.num_inputs, varDT=args.varDT)# Create a new instance of the model
+    model.load_state_dict(torch.load(model_save_path))
+    
+    test_loss, avg_num_steps, losses, trajectories = train(model, optimizer, epoch, loader_test, args, backprop=False, rollout=args.rollout)
+    results['test loss'].append(test_loss)
+    results['traj_loss'].append(losses)
     json_object = json.dumps(results, indent=4)
+    
     with open(args.outf + "/" + args.exp_name + "/loss"+"_seed="+str(seed)+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_num_timesteps="+str(args.num_timesteps)+"_n_layers="+str(args.n_layers)+"_lr="+str(args.lr)+"_wd="+str(args.weight_decay)+"_.json", "w") as outfile:
         outfile.write(json_object)
-
+    
+    #save trajectories in pickle
+    with open(args.outf + "/" + args.exp_name + "/trajectories"+"_seed="+str(seed)+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_num_timesteps="+str(args.num_timesteps)+"_n_layers="+str(args.n_layers)+"_lr="+str(args.lr)+"_wd="+str(args.weight_decay)+"_.pkl", "wb") as f:
+        pickle.dump(trajectories, f)
         
     return best_train_loss, best_val_loss, best_test_loss, best_epoch
 
@@ -238,7 +250,9 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     res = {'epoch': epoch,'losses': [], 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
     
     #print(f"this is the {loader.dataset.partition} partition")
-    
+    if rollout:
+        first = True ## 0: target, 1: prediction
+
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[B, 5, T, 3]
@@ -252,7 +266,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
             if args.num_inputs > 1 : #and rollout
                 
                 start = 30
-                loc = loc.transpose(0,1) #T,100,5,3
+                loc = loc.transpose(0,1) #num_inputs,100,5,3
                 vel = vel.transpose(0,1)
                 
                 if args.varDT:
@@ -310,10 +324,6 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
             if rollout:
                 traj_len = args.traj_len
                 
-                
-                # call rollout, get the returned indices, 
-                # retreieve them to get locs true accordingly
-                
                 #print(locs_true.shape)
                 if args.variable_deltaT:
                     #print(loc_true.shape) #[100, 519, 5, 3]
@@ -335,25 +345,33 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 num_elements = int(0.4 * args.traj_len*args.num_timesteps)  # Calculate 40% of the total elements
                 if args.traj_len*args.num_timesteps >= 50:
                     num_elements = 20
-                sup = first_invalid_idx if first_invalid_idx > 15 else num_elements
+
+                sup =  num_elements #first_invalid_idx if first_invalid_idx > 15 else
                 
                 locs_pred = locs_pred[:sup]
                 locs_true = locs_true[:sup]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
-                #locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
-                #locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
-                
-                print("check reshape:")
-                print(torch.sum(locs_pred-locs_true))
+
+                # print("check reshape:")
+                # print(torch.sum(locs_pred-locs_true))
                 # shape at this moment of locs:(T, B*N,3)
-                #save here preds and targets: shape after: (B, T, N*3)
-                #print(locs_true.shape,locs_pred.shape)
-                locs_true = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
-                locs_pred = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.transpose(0, 1).contiguous().view(-1, 3)
+                #save here preds and targets: .reshape(T, B, N*D).permute(1, 0, 2)
                 
-                print(torch.sum(locs_pred-locs_true))
-                print("checked")
-                exit()
+                if first:
+                    targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
+                    preds = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.transpose(0, 1).contiguous().view(-1, 3)
+                    traj_targ = targets
+                    traj_pred = preds
+                    first = False
+                else:
+                    targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
+                    preds = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)
+                    traj_targ = torch.cat((traj_targ, targets), dim=0)
+                    traj_pred = torch.cat((traj_pred, preds), dim=0)
+                
+                # print(torch.sum(locs_pred-locs_true))
+                # print("checked")
+
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 
                 #loss with metric (A-MSE)
@@ -398,10 +416,10 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     
 
     if rollout:
-        wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
-        return res['loss'] / res['counter'], res['avg_num_steps'], res['losses']
+        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
+        return res['loss'] / res['counter'], res['avg_num_steps'], res['losses'], torch.stack((traj_targ,traj_pred), dim=0)
     else:
-        wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
+        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
         return res['loss'] / res['counter']
 
 

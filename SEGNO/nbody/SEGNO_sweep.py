@@ -1,6 +1,6 @@
 import wandb
 
-from train_nbody import train as train_model
+from train_nbody_one_test import train as train_model
 from sweep_params import param_dicts
 
 MAX_RUN = 50

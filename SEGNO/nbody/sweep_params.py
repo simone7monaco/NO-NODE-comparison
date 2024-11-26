@@ -16,7 +16,7 @@ param_dicts = {
         'value': "nbody_small"
         }, 
     'seed': {
-        'value': 1
+        'values': [1, 22, 39, 42, 58, 64, 70, 78, 86, 93]
         }, 
     'log': {
         'value': False
@@ -34,7 +34,7 @@ param_dicts = {
         'value': False
         },
     'test_interval': {
-        'value': 5
+        'value': 10
         }, 
     'time_exp': {
         'value': False

@@ -13,13 +13,13 @@ param_dicts = {
         'value': False
         }, 
     'seed': {
-        'value': 1
+        'values': [1, 22, 39, 42, 58, 64, 70, 78, 86, 93]
         }, 
     'log_interval': {
         'value': 1
         }, 
     'test_interval': {
-        'value': 5
+        'value': 10
         }, 
     'outf': {
         'value': 'exp_results'

@@ -1,6 +1,6 @@
 import wandb
 
-from main_simulation_simple_no import main
+from main_simulation_simple_one_test import main
 from sweep_params import param_dicts
 
 MAX_RUN = 50
