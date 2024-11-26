@@ -118,11 +118,11 @@ def train(gpu, args):
     best = {'long_loss': {}}
     print(args.varDT,args.num_inputs,args.only_test)
     for epoch in range(0, args.epochs):
-        train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args, use_previous_state=args.use_previous_state)
+        train_loss, _ = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_train, device, args)
         results['train loss'].append(train_loss)
         if (epoch+1) % args.test_interval == 0 or epoch == args.epochs-1:
 
-            val_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_val, device, args, backprop=False,use_previous_state=args.use_previous_state)
+            val_loss, res = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_val, device, args, backprop=False)
            
             
             results['eval epoch'].append(epoch)
@@ -165,7 +165,7 @@ def train(gpu, args):
     return best_val_loss, best_test_loss, best_epoch
 
 
-def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop=True,rollout=False,use_previous_state=False):
+def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop=True,rollout=False):
     if backprop:
         model.train()
     else:
