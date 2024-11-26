@@ -242,7 +242,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
                     traj_targ = targets
                     traj_pred = preds
                     first = False
-            else:
+            else: 
                 targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
                 preds = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)
                 traj_targ = torch.cat((traj_targ, targets), dim=0)
