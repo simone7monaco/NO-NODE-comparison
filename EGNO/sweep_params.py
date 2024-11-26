@@ -86,7 +86,7 @@ param_dicts = {
         'value': False 
         }, 
     'num_inputs': {
-        'values': [1,2,3,4]
+        'values': [1,2,3]
         },
     'traj_len': {
         'value': 10   #static?
