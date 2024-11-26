@@ -148,11 +148,11 @@ varDt = False
 def main(config=None):
 
     #if wandb sweep use config
-    # if config is not None:
-    #     print("wandb sweep")
-    #     args = config
-    #     args.cuda = not args.no_cuda and torch.cuda.is_available()
-    #     device = torch.device("cuda" if args.cuda else "cpu")
+    if config is not None:
+        print("wandb sweep")
+        args = config
+        args.cuda = not args.no_cuda and torch.cuda.is_available()
+        device = torch.device("cuda" if args.cuda else "cpu")
     
     print(args)
     seed = args.seed
@@ -416,10 +416,10 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     
 
     if rollout:
-        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
         return res['loss'] / res['counter'], res['avg_num_steps'], res['losses'], torch.stack((traj_targ,traj_pred), dim=0)
     else:
-        #wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
+        wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
         return res['loss'] / res['counter']
 
 

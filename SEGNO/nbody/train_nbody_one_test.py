@@ -177,7 +177,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
         first = True
     n_nodes = args.n_balls
     batch_size = args.batch_size
-    print(f"n nodes: {n_nodes}")
+    
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         for i in range(len(data)):
@@ -234,7 +234,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, device, args, backprop
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
 
-            sup = args.num_steps*traj_len
+            sup = traj_len
             #here add trajectories
             if first:
                     targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
