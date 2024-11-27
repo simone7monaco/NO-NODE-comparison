@@ -29,17 +29,16 @@ def train(config=None):
         
         config = wandb.config
 
-        # if config.num_inputs <=1 and config.varDT:
-        #     config.varDT = False
-        #     config.update({"varDT": False}, allow_val_change=True)
+       
 
-        if config.gpus == 0:
-            config.mode = 'cpu'
-            train_model(0, config)
+        # if config.gpus == 0:
+        #     config.mode = 'cpu'
+        #     train_model(0, config)
         
-        elif config.gpus == 1:
-            config.mode = 'gpu'
-            train_model(0, config)
+        # elif config.gpus == 1:
+        #     config.mode = 'gpu'
+        #     train_model(0, config)
+        train_model(0, config)
         
 
 sweep_id = wandb.sweep(sweep_config, project="SEGNO-sweep-new")

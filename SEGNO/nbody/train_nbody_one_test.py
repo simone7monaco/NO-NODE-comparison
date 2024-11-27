@@ -76,7 +76,7 @@ def train(gpu, args):
     if args.gpus == 0:
         device = 'cpu'
     else:
-        device = torch.device('cuda:' + str(gpu))
+        device = torch.device('cuda:' + str(args.gpus))
     
     try:
         os.makedirs(args.outf)
