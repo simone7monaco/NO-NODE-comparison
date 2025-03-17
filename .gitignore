@@ -10,3 +10,5 @@ expSEGNO/
 expEGNO/
 EGNO_exp_1/
 SEGNO_exp_1/
+**/__pycache__/
+.vscode/
