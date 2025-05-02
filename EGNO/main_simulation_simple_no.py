@@ -2,9 +2,9 @@ import argparse
 from argparse import Namespace
 import torch
 import torch.utils.data
-from simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
-from model.egno import EGNO
-from utils import EarlyStopping, cumulative_random_tensor_indices_capped, random_ascending_tensor
+from .simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
+from .model.egno import EGNO
+from .utils import EarlyStopping, cumulative_random_tensor_indices_capped, random_ascending_tensor
 import os
 from torch import nn, optim
 import json
@@ -14,135 +14,82 @@ import numpy as np
 import wandb
 
 
+def get_args():
+    parser = argparse.ArgumentParser(description='EGNO')
+    parser.add_argument('--exp_name', type=str, default='exp_1', metavar='N', help='experiment_name')
+    parser.add_argument('--batch_size', type=int, default=100, metavar='N',
+                        help='input batch size for training (default: 128)')
+    parser.add_argument('--epochs', type=int, default=1000, metavar='N',
+                        help='number of epochs to train (default: 10)')
+    parser.add_argument('--no-cuda', action='store_true', default=False,
+                        help='enables CUDA training')
+    parser.add_argument('--seed', type=int, default=1, metavar='S',
+                        help='random seed (default: 1)')
+    parser.add_argument('--log_interval', type=int, default=1, metavar='N',
+                        help='how many batches to wait before logging training status')
+    parser.add_argument('--test_interval', type=int, default=5, metavar='N',
+                        help='how many epochs to wait before logging test')
+    parser.add_argument('--outf', type=str, default='exp_results', metavar='N',
+                        help='folder to output the json log file')
+    parser.add_argument('--lr', type=float, default=5e-4, metavar='N',
+                        help='learning rate')
+    parser.add_argument('--nf', type=int, default=64, metavar='N',
+                        help='hidden dim')
+    parser.add_argument('--model', type=str, default='egno', metavar='N')
+    parser.add_argument('--n_layers', type=int, default=4, metavar='N',
+                        help='number of layers for the autoencoder')
+    parser.add_argument('--max_training_samples', type=int, default=3000, metavar='N',
+                        help='maximum amount of training samples')
+    parser.add_argument('--weight_decay', type=float, default=1e-12, metavar='N',
+                        help='timing experiment')
+    parser.add_argument('--data_dir', type=str, default='',
+                        help='Data directory.')
+    parser.add_argument('--dropout', type=float, default=0.5,
+                        help='Dropout rate (1 - keep probability).')
+    parser.add_argument("--config_by_file", default=None, nargs="?", const='', type=str, )
 
-parser = argparse.ArgumentParser(description='EGNO')
-parser.add_argument('--exp_name', type=str, default='exp_1', metavar='N', help='experiment_name')
-parser.add_argument('--batch_size', type=int, default=100, metavar='N',
-                    help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=1000, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='enables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--log_interval', type=int, default=1, metavar='N',
-                    help='how many batches to wait before logging training status')
-parser.add_argument('--test_interval', type=int, default=5, metavar='N',
-                    help='how many epochs to wait before logging test')
-parser.add_argument('--outf', type=str, default='exp_results', metavar='N',
-                    help='folder to output the json log file')
-parser.add_argument('--lr', type=float, default=5e-4, metavar='N',
-                    help='learning rate')
-parser.add_argument('--nf', type=int, default=64, metavar='N',
-                    help='hidden dim')
-parser.add_argument('--model', type=str, default='egno', metavar='N')
-parser.add_argument('--n_layers', type=int, default=4, metavar='N',
-                    help='number of layers for the autoencoder')
-parser.add_argument('--max_training_samples', type=int, default=3000, metavar='N',
-                    help='maximum amount of training samples')
-parser.add_argument('--weight_decay', type=float, default=1e-12, metavar='N',
-                    help='timing experiment')
-parser.add_argument('--data_dir', type=str, default='',
-                    help='Data directory.')
-parser.add_argument('--dropout', type=float, default=0.5,
-                    help='Dropout rate (1 - keep probability).')
-parser.add_argument("--config_by_file", default=None, nargs="?", const='', type=str, )
+    parser.add_argument('--lambda_link', type=float, default=1,
+                        help='The weight of the linkage loss.')
+    parser.add_argument('--n_cluster', type=int, default=3,
+                        help='The number of clusters.')
+    parser.add_argument('--flat', action='store_true', default=False,
+                        help='flat MLP')
+    parser.add_argument('--interaction_layer', type=int, default=3,
+                        help='The number of interaction layers per block.')
+    parser.add_argument('--pooling_layer', type=int, default=3,
+                        help='The number of pooling layers in EGPN.')
+    parser.add_argument('--decoder_layer', type=int, default=1,
+                        help='The number of decoder layers.')
+    parser.add_argument('--norm', action='store_true', default=False,
+                        help='Use norm in EGNO')
 
-parser.add_argument('--lambda_link', type=float, default=1,
-                    help='The weight of the linkage loss.')
-parser.add_argument('--n_cluster', type=int, default=3,
-                    help='The number of clusters.')
-parser.add_argument('--flat', action='store_true', default=False,
-                    help='flat MLP')
-parser.add_argument('--interaction_layer', type=int, default=3,
-                    help='The number of interaction layers per block.')
-parser.add_argument('--pooling_layer', type=int, default=3,
-                    help='The number of pooling layers in EGPN.')
-parser.add_argument('--decoder_layer', type=int, default=1,
-                    help='The number of decoder layers.')
-parser.add_argument('--norm', action='store_true', default=False,
-                    help='Use norm in EGNO')
-
-parser.add_argument('--varDT', type=bool, default=False,
-                    help='The number of inputs to give for each prediction step.')
-parser.add_argument('--rollout', type=bool, default=True,
-                    help='The number of inputs to give for each prediction step.')
-parser.add_argument('--variable_deltaT', type=bool, default=False,
-                    help='The number of inputs to give for each prediction step.')
-parser.add_argument('--only_test', type=bool, default=True,
-                    help='The number of inputs to give for each prediction step.')
-parser.add_argument('--num_inputs', type=int, default=1,
-                    help='The number of inputs to give for each prediction step.')
-parser.add_argument('--traj_len', type=int, default=10,
-                    help='The lenght of the trajectory in case of rollout.')
-parser.add_argument('--num_timesteps', type=int, default=10,
-                    help='The number of time steps.')
-parser.add_argument('--time_emb_dim', type=int, default=32,
-                    help='The dimension of time embedding.')
-parser.add_argument('--num_modes', type=int, default=5,
-                    help='The number of particles.')
-parser.add_argument('--n_balls', type=int, default=5,
-                    help='The number of modes.')
+    parser.add_argument('--varDT', type=bool, default=False,
+                        help='The number of inputs to give for each prediction step.')
+    parser.add_argument('--rollout', type=bool, default=True,
+                        help='The number of inputs to give for each prediction step.')
+    parser.add_argument('--variable_deltaT', type=bool, default=False,
+                        help='The number of inputs to give for each prediction step.')
+    parser.add_argument('--only_test', type=bool, default=True,
+                        help='The number of inputs to give for each prediction step.')
+    parser.add_argument('--num_inputs', type=int, default=1,
+                        help='The number of inputs to give for each prediction step.')
+    parser.add_argument('--traj_len', type=int, default=10,
+                        help='The lenght of the trajectory in case of rollout.')
+    parser.add_argument('--num_timesteps', type=int, default=10,
+                        help='The number of time steps.')
+    parser.add_argument('--time_emb_dim', type=int, default=32,
+                        help='The dimension of time embedding.')
+    parser.add_argument('--num_modes', type=int, default=5,
+                        help='The number of particles.')
+    parser.add_argument('--n_balls', type=int, default=5,
+                        help='The number of modes.')
+    return parser.parse_args()
 
 time_exp_dic = {'time': 0, 'counter': 0}
 
 # Build the dictionary from the parser arguments
 #params = {arg.dest.replace('-', '_'): {'value': arg.default} for arg in parser._actions if arg.dest != 'help'}
 
-
-args = parser.parse_args()
-if args.config_by_file is not None:
-    if len(args.config_by_file) == 0:
-        job_param_path = './configs/config_simulation_simple_no.json'
-    else:
-        job_param_path = args.config_by_file
-    with open(job_param_path, 'r') as f:
-        hyper_params = json.load(f)
-        # Only update existing keys
-        args = vars(args)
-        args.update((k, v) for k, v in hyper_params.items() if k in args)
-        args = Namespace(**args)
-
-args.cuda = not args.no_cuda and torch.cuda.is_available()
-
-# wandb.login()
-
-# wandb.init( project="NO-NODE-comparison",
-#            config={
-#     "learning_rate": args.lr,
-#     "weight_decay": args.weight_decay,
-#     "hidden_dim": args.nf,
-#     "dropout": args.dropout,
-#     "batch_size": args.batch_size,
-#     "epochs": args.epochs,
-#     "model": args.model,
-#     "nlayers": args.n_layers,  
-#     "time_emb_dim": args.time_emb_dim,
-#     "num_modes": args.num_modes,  
-#     "rollout": args.rollout,  
-#     "num_timesteps": args.num_timesteps,
-#     "num_inputs": args.num_inputs,
-#     "only_test": args.only_test,
-#     "varDT": args.varDT,
-#     "variable_deltaT": args.variable_deltaT
-#     })
-
-
-device = torch.device("cuda" if args.cuda else "cpu")
-loss_mse = nn.MSELoss(reduction='none')
-
-print(args)
-try:
-    os.makedirs(args.outf)
-except OSError:
-    pass
-
-try:
-    os.makedirs(args.outf + "/" + args.exp_name)
-except OSError:
-    pass
-
-varDt = False
 
 def main(config=None):
 
@@ -197,11 +144,11 @@ def main(config=None):
     best_train_loss = 1e8
     print(args.rollout,args.num_inputs,args.varDT, args.n_balls)
     for epoch in range(0, args.epochs):
-        train_loss = train(model, optimizer, epoch, loader_train,args)
+        train_loss = run_epoch(model, optimizer, epoch, loader_train,args)
         results['train loss'].append(train_loss)
         if (epoch +1) % args.test_interval == 0:
-            val_loss = train(model, optimizer, epoch, loader_val,args, backprop=False)
-            test_loss, avg_num_steps, losses = train(model, optimizer, epoch, loader_test,args, backprop=False, rollout=args.rollout)
+            val_loss = run_epoch(model, optimizer, epoch, loader_val,args, backprop=False)
+            test_loss, avg_num_steps, losses = run_epoch(model, optimizer, epoch, loader_test,args, backprop=False, rollout=args.rollout)
 
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
@@ -229,7 +176,8 @@ def main(config=None):
     return best_train_loss, best_val_loss, best_test_loss, best_epoch
 
 
-def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
+def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, rollout=False):
+    device = args.device
     if backprop:
         model.train()
     else:
@@ -287,10 +235,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 edge_attr = torch.stack(edge_attrs)
                 nodes = torch.stack(nodes)
                 loc_mean = torch.stack(loc_mean)
-
-                
             else:
-            
                 loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))  # [BN, 3]
 
                 loc = loc.view(-1, loc.shape[-1])
@@ -309,7 +254,6 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
             
             if rollout:
                 traj_len = args.traj_len
-                
                 
                 # call rollout, get the returned indices, 
                 # retreieve them to get locs true accordingly
@@ -357,7 +301,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 
                 #loss with metric (A-MSE)
-                losses = loss_mse(locs_pred, locs_true).view(sup, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
+                losses = criterion(locs_pred, locs_true).view(sup, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
                 #print(losses.shape)
                 #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
@@ -370,7 +314,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 loc_end = loc_true.view(batch_size * n_nodes, args.num_timesteps, 3).transpose(0, 1).contiguous().view(-1, 3)
                 loc_pred, vel_pred, _ = model(loc, nodes, edges, edge_attr, v=vel, loc_mean=loc_mean, rand_timesteps=timesteps)
                 #pearson_correlation_batch(loc_pred.reshape(args.num_timesteps,batch_size * n_nodes, 3),loc_end,n_nodes)
-                losses = loss_mse(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
+                losses = criterion(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
                 losses = torch.mean(losses, dim=(1, 2))
                 loss = torch.mean(losses)
                 
@@ -399,10 +343,9 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
 
     if rollout:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
-        return res['loss'] / res['counter'], res['avg_num_steps'], res['losses']
     else:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
-        return res['loss'] / res['counter']
+    return res['loss'] / res['counter']
 
 
 def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size,num_steps=10,variable_deltaT=False, timesteps=None):
@@ -536,11 +479,42 @@ def pearson_correlation_batch(x, y, N):
     #return the average (in the batch) number of steps before reaching a value of correlation lower than 0.5
     #return the minimum first index along T dimension after which correlation drops below the threshold                                 
     return correlation, torch.mean(torch.Tensor(num_steps_batch)), first_failure_index 
-
-
-    
+ 
 
 if __name__ == "__main__":
+    args = get_args()
+    if args.config_by_file is not None:
+        if len(args.config_by_file) == 0:
+            job_param_path = './configs/config_simulation_simple_no.json'
+        else:
+            job_param_path = args.config_by_file
+        with open(job_param_path, 'r') as f:
+            hyper_params = json.load(f)
+            # Only update existing keys
+            args = vars(args)
+            args.update((k, v) for k, v in hyper_params.items() if k in args)
+            args = Namespace(**args)
+
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+
+
+
+    device = torch.device("cuda" if args.cuda else "cpu")
+    loss_mse = nn.MSELoss(reduction='none')
+
+    print(args)
+    try:
+        os.makedirs(args.outf)
+    except OSError:
+        pass
+
+    try:
+        os.makedirs(args.outf + "/" + args.exp_name)
+    except OSError:
+        pass
+
+    varDt = False
+
     best_train_loss, best_val_loss, best_test_loss, best_epoch = main()
     print("best_train = %.6f" % best_train_loss)
     print("best_val = %.6f" % best_val_loss)

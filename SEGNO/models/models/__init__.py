@@ -1,1 +1,1 @@
-from models.models.gcl import GCL, GCL_rf
+from .gcl import GCL, GCL_rf

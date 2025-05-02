@@ -1,0 +1,36 @@
+EGNO:
+  model_params:
+    n_layers: 4
+    hidden_nf: 64
+    flat: false
+    norm: false
+    time_emb_dim: 32
+    in_node_nf: 1
+    in_edge_nf: 2
+    with_v: True
+    num_modes: 5
+    time_emb_dim: 32
+    # interaction_layer: 3
+    # pooling_layer: 3
+    # decoder_layer: 1
+    # lambda_link: 1
+
+  training_params:
+    lr: 5e-4
+    weight_decay: 1e-12
+
+
+SEGNO:
+  model_params:
+    in_node_nf: 1
+    in_edge_nf: 1
+    hidden_nf: 64
+    n_layers: 2
+    use_previous_state: false
+
+  training_params:
+    lr: 5e-3
+    weight_decay: 1e-8
+
+  other_params:
+    nbody_name: nbody_small
