@@ -1,4 +1,5 @@
 **/__pycache__
+data/*npy
 newvenv/
 EGNO/wandb
 EGNO/simple
