@@ -1,19 +1,15 @@
-
-
 import numpy as np
 import torch
-import os.path as osp
-import pathlib
 
 
 class NBodyDataset():
     """
     NBodyDataset
-
     """
 
-    def __init__(self, partition='train', max_samples=1e8, dataset_name="nbody_small", n_balls=5):
+    def __init__(self, data_dir, partition='train', max_samples=1e8, dataset_name="nbody_small", n_balls=5):
         self.partition = partition
+        self.data_dir = data_dir
         if self.partition == 'val':
             self.suffix = 'valid'
         else:
@@ -31,9 +27,9 @@ class NBodyDataset():
         self.data, self.edges = self.load()
 
     def load(self):
-        dir = pathlib.Path(__file__).parent.absolute()
-        loc = np.load(osp.join(dir, 'dataset_gravity', 'loc_' + self.suffix + '.npy'))
-        vel = np.load(osp.join(dir, 'dataset_gravity', 'vel_' + self.suffix + '.npy'))
+        # loc = np.load(osp.join(dir, 'dataset_gravity', 'loc_' + self.suffix + '.npy'))
+        loc = np.load(self.data_dir / f'loc_{self.suffix}.npy')
+        vel = np.load(self.data_dir / f'vel_{self.suffix}.npy')
         loc, vel = self.preprocess(loc, vel)
         return (loc, vel), None
 

@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from models.models.gcl import GCL, E_GCL, E_GCL_ERGN_vel
+from ..models.models.gcl import GCL, E_GCL, E_GCL_ERGN_vel
 
 class SEGNO(nn.Module):
     def __init__(self, in_node_nf, in_edge_nf, hidden_nf, device='cpu', act_fn=nn.SiLU(), n_layers=4, coords_weight=1.0,

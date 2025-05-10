@@ -1,11 +1,10 @@
-import torch
 from torch import nn
-from models.models.gcl import GCL, E_GCL, E_GCL_ERGN_vel
+from ...models.models.gcl import GCL, E_GCL, E_GCL_ERGN_vel
 
 class SEGNO(nn.Module):
     def __init__(self, in_node_nf, in_edge_nf, hidden_nf, device='cpu', act_fn=nn.SiLU(), n_layers=4, coords_weight=1.0,
-                 recurrent=False, norm_diff=False, tanh=False, invariant=True, norm_vel=True, emp=True, use_previous_state=0,
-                 variableDT=False):
+                 recurrent=True, norm_diff=False, tanh=False, invariant=True, norm_vel=True, emp=True, use_previous_state=0,
+                 varDT=False):
         super(SEGNO, self).__init__()
         self.hidden_nf = hidden_nf
         self.device = device
@@ -14,7 +13,7 @@ class SEGNO(nn.Module):
         self.invariant = invariant
         self.norm_vel = norm_vel
         self.use_previous_state = True if use_previous_state > 1 else False
-        self.varDT = variableDT
+        self.varDT = varDT
         self.emp = emp
         self.sigmoid = nn.Sigmoid()
         self.forget = nn.Sequential(nn.Linear(hidden_nf + 3, 1)) if invariant else nn.Sequential(nn.Linear(hidden_nf + 6, 1))
