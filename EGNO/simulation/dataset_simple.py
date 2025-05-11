@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import os.path as osp
+from pathlib import Path
 
 
 class NBodyDataset():
@@ -9,7 +9,7 @@ class NBodyDataset():
 
     """
 
-    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset_name="nbody_small",n_balls=5):
+    def __init__(self, data_dir, partition='train', max_samples=1e8, dataset_name="nbody_small",n_balls=5):
         self.partition = partition
         self.data_dir = data_dir
         if self.partition == 'val':
@@ -30,10 +30,10 @@ class NBodyDataset():
 
     def load(self):
         dir = self.data_dir
-        loc = np.load(osp.join(dir, 'simple', 'loc_' + self.suffix + '.npy'))
-        vel = np.load(osp.join(dir, 'simple', 'vel_' + self.suffix + '.npy'))
-        edges = np.load(osp.join(dir, 'simple', 'edges_' + self.suffix + '.npy'))
-        charges = np.load(osp.join(dir, 'simple', 'charges_' + self.suffix + '.npy'))
+        loc = np.load(self.data_dir / f'loc_{self.suffix}.npy')
+        vel = np.load(self.data_dir / f'vel_{self.suffix}.npy')
+        edges = np.load(self.data_dir / f'edges_{self.suffix}.npy')
+        charges = np.load(self.data_dir / f'charges_{self.suffix}.npy')
 
         loc, vel, edge_attr, edges, charges = self.preprocess(loc, vel, edges, charges)
         return (loc, vel, edge_attr, charges), edges
@@ -106,7 +106,7 @@ class NBodyDynamicsDataset(NBodyDataset):
         self.traj_len = traj_len
         self.num_inputs = num_inputs
         self.var_dt = varDT
-        super(NBodyDynamicsDataset, self).__init__(partition, data_dir, max_samples, dataset_name, n_balls=n_balls)
+        super(NBodyDynamicsDataset, self).__init__(data_dir, partition, max_samples, dataset_name, n_balls=n_balls)
 
     def __getitem__(self, i):
         loc, vel, edge_attr, charges = self.data

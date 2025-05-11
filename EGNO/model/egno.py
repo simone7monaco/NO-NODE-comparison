@@ -1,6 +1,6 @@
-from model.basic import EGNN
-from model.layer_no import TimeConv, get_timestep_embedding, TimeConv_x
-from utils import repeat_elements_to_exact_shape, random_ascending_tensor
+from ..model.basic import EGNN
+from ..model.layer_no import TimeConv, get_timestep_embedding, TimeConv_x
+from ..utils import repeat_elements_to_exact_shape, random_ascending_tensor
 import torch.nn as nn
 import torch
 
