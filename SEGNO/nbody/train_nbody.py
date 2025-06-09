@@ -171,7 +171,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 data[i] = data[i].view(-1, data[i].size(-1))  
                 
 
-        locs, vels, loc_ends = data   #locs shape: [519, 500, 3] (T,BN,3)
+        locs, vels = data   #locs shape: [519, 500, 3] (T,BN,3)
         start = 30
         loc, loc_end, vel = locs[30], locs[start+args.num_timesteps], vels[30]
         #print(loc.shape)

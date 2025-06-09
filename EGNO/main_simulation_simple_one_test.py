@@ -358,7 +358,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 #save here preds and targets: .reshape(T, B, N*D).permute(1, 0, 2)
                 
                 if first:
-                    targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
+                    targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ## (B, T )   .reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
                     preds = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.transpose(0, 1).contiguous().view(-1, 3)
                     traj_targ = targets
                     traj_pred = preds

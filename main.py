@@ -22,8 +22,8 @@ def get_args():
     parser.add_argument('--epochs', type=int, default=1000,
                         help='number of epochs to train (default: 1000)')
     parser.add_argument('--data_dir', type=Path, default='data')
-    parser.add_argument('--dataset', type=str, default='qm9',
-                        help='Dataset to use (default: qm9)')
+    parser.add_argument('--dataset', type=str, default='charged', choices=['charged', 'gravity'], #select dataset
+                        help='Dataset to use (default: charged)')
     parser.add_argument('--max_samples', type=int, default=3000)
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed (default: 42)')
@@ -93,14 +93,14 @@ def main(args):
 
         nbody_name = config['other_params']['nbody_name']
 
-        dataset_train = NBodyDataset(args.data_dir, partition='train', dataset_name=nbody_name,
+        dataset_train = NBodyDataset(args.data_dir, partition='train', dataset_name=nbody_name, dataset=args.dataset,
                                     max_samples=args.max_samples, n_balls=args.n_balls)
         loader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
-        dataset_val = NBodyDataset(args.data_dir, partition='val', dataset_name=nbody_name,n_balls=args.n_balls)
+        dataset_val = NBodyDataset(args.data_dir, partition='val', dataset_name=nbody_name, dataset=args.dataset, n_balls=args.n_balls)
         loader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False)
 
-        dataset_test = NBodyDataset(args.data_dir, partition='test', dataset_name=nbody_name,n_balls=args.n_balls)
+        dataset_test = NBodyDataset(args.data_dir, partition='test', dataset_name=nbody_name, dataset=args.dataset, n_balls=args.n_balls)
         loader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False)
 
         params = config['model_params'] | dict(varDT=args.varDT, device=device)
@@ -114,16 +114,16 @@ def main(args):
 
         args.varDT = True if args.varDT and args.num_inputs>1 else False
 
-        dataset_train = SimulationDataset(data_dir=args.data_dir, partition='train', max_samples=args.max_samples, n_balls=args.n_balls, 
+        dataset_train = SimulationDataset(data_dir=args.data_dir, partition='train', max_samples=args.max_samples, dataset=args.dataset, n_balls=args.n_balls, 
                                           num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT) #, num_inputs=args.num_inputs
         loader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=0)
 
-        dataset_val = SimulationDataset(data_dir=args.data_dir, partition='val', n_balls=args.n_balls, 
+        dataset_val = SimulationDataset(data_dir=args.data_dir, partition='val', n_balls=args.n_balls, dataset=args.dataset,
                                         num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT)#num_inputs=args.num_inputs
         loader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                                 num_workers=0)
 
-        dataset_test = SimulationDataset(data_dir=args.data_dir, partition='test', n_balls=args.n_balls, 
+        dataset_test = SimulationDataset(data_dir=args.data_dir, partition='test', n_balls=args.n_balls, dataset=args.dataset,
                                          num_timesteps=args.num_timesteps, num_inputs=args.num_inputs, rollout=True, 
                                          traj_len=args.traj_len, varDT= args.varDT)
         loader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,

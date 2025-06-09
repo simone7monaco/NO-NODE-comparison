@@ -12,7 +12,7 @@ gravity_small: python3 -u generate_dataset.py --simulation=gravity --num-train 1
 parser = argparse.ArgumentParser()
 parser.add_argument('--simulation', type=str, default='charged',
                     help='What simulation to generate.')
-parser.add_argument('--num-train', type=int, default=3000,
+parser.add_argument('--num-train', type=int, default=10000,
                     help='Number of training simulations to generate.')
 parser.add_argument('--num-valid', type=int, default=2000,
                     help='Number of validation simulations to generate.')

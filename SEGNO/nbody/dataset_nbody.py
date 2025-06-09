@@ -7,7 +7,7 @@ class NBodyDataset():
     NBodyDataset
     """
 
-    def __init__(self, data_dir, partition='train', max_samples=1e8, dataset_name="nbody_small", n_balls=5):
+    def __init__(self, data_dir, partition='train', max_samples=1e8, dataset="charged",dataset_name="nbody_small", n_balls=5):
         self.partition = partition
         self.data_dir = data_dir
         if self.partition == 'val':
@@ -16,9 +16,9 @@ class NBodyDataset():
             self.suffix = self.partition
         self.dataset_name = dataset_name
         if dataset_name == "nbody":
-            self.suffix += "_gravity5_initvel1"
+            self.suffix += f"_{dataset}5_initvel1"
         elif dataset_name == "nbody_small" or dataset_name == "nbody_small_out_dist":
-            self.suffix += f"_charged{n_balls}_initvel1small"
+            self.suffix += f"_{dataset}{n_balls}_initvel1small"
         else:
             raise Exception("Wrong dataset name %s" % self.dataset_name)
 
@@ -65,7 +65,7 @@ class NBodyDataset():
         #vel = torch.transpose(vel, 1, 2)
          
         #loc shape: [519, 5, 3]
-        return loc, vel, loc
+        return loc, vel
 
     def __len__(self):
         return len(self.data[0])
