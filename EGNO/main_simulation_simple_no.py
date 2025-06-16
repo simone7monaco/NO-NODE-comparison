@@ -295,9 +295,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 locs_true = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
                 locs_pred = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.transpose(0, 1).contiguous().view(-1, 3)
                 
-                print(torch.sum(locs_pred-locs_true))
-                print("checked")
-                exit()
+                
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 
                 #loss with metric (A-MSE)
