@@ -1,5 +1,6 @@
 import argparse
 from argparse import Namespace
+import pickle
 import torch
 import torch.utils.data
 from .simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
@@ -148,31 +149,39 @@ def main(config=None):
         results['train loss'].append(train_loss)
         if (epoch +1) % args.test_interval == 0:
             val_loss = run_epoch(model, optimizer, epoch, loader_val,args, backprop=False)
-            test_loss, avg_num_steps, losses = run_epoch(model, optimizer, epoch, loader_test,args, backprop=False, rollout=args.rollout)
 
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
-            results['test loss'].append(test_loss)
-            results['traj_loss'].append(losses)
+            
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                best_test_loss = test_loss
                 best_train_loss = train_loss
-                best_avg_num_steps = avg_num_steps
                 best_epoch = epoch
                 # Save model is move to early stopping.
-            print("*** Best Val Loss: %.5f \t Best Test Loss: %.5f \t Best Test avg num steps: %.4f \t Best epoch %d"
-                  % (best_val_loss, best_test_loss, best_avg_num_steps, best_epoch))
+            print("*** Best Val Loss: %.5f \t  Best epoch %d"
+                  % (best_val_loss, best_epoch))
             early_stopping(val_loss, model)
             if early_stopping.early_stop:
                 print("Early Stopping.")
                 break
                 
+    model = EGNO(n_layers=args.n_layers, in_node_nf=1, in_edge_nf=2, hidden_nf=args.nf, device=device,
+                     with_v=True, flat=args.flat, activation=nn.SiLU(), norm=args.norm, use_time_conv=True,
+                     num_modes=args.num_modes, num_timesteps=args.num_timesteps, time_emb_dim=args.time_emb_dim, num_inputs=args.num_inputs, varDT=args.varDT)# Create a new instance of the model
+    model.load_state_dict(torch.load(model_save_path, weights_only=False))
+
+    test_loss, avg_num_steps, losses, trajectories = run_epoch(model, optimizer, epoch, loader_test, args, backprop=False, rollout=args.rollout)
+    results['test loss'].append(test_loss)
+    results['traj_loss'].append(losses)
     json_object = json.dumps(results, indent=4)
+
     with open(args.outf + "/" + args.exp_name + "/loss"+"_seed="+str(seed)+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_num_timesteps="+str(args.num_timesteps)+"_n_layers="+str(args.n_layers)+"_lr="+str(args.lr)+"_wd="+str(args.weight_decay)+"_.json", "w") as outfile:
         outfile.write(json_object)
 
-        
+    #save trajectories in pickle
+    with open(args.outf + "/" + args.exp_name + "/trajectories"+"_seed="+str(seed)+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_num_timesteps="+str(args.num_timesteps)+"_n_layers="+str(args.n_layers)+"_lr="+str(args.lr)+"_wd="+str(args.weight_decay)+"_.pkl", "wb") as f:
+        pickle.dump(trajectories, f)
+
     return best_train_loss, best_val_loss, best_test_loss, best_epoch
 
 
@@ -186,6 +195,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
     res = {'epoch': epoch,'losses': [], 'loss': 0,"tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'lp_loss': 0}
     
     #print(f"this is the {loader.dataset.partition} partition")
+    if rollout:
+        first = True ## 0: target, 1: prediction
     
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
@@ -233,7 +244,10 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 loc = torch.stack(loc_inputs)
                 vel = torch.stack(vel_inputs)
                 edge_attr = torch.stack(edge_attrs)
-                nodes = torch.stack(nodes)
+                nodes = torch.stack(nodes) # num_inputs, BN, 1
+                if charges is not None:
+                    nodes = torch.cat([nodes, charges.reshape(-1, charges.shape[-1]).unsqueeze(0).repeat(args.num_inputs, 1, 1)], dim=-1)
+                    
                 loc_mean = torch.stack(loc_mean)
             else:
                 loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))  # [BN, 3]
@@ -243,6 +257,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 
                 batch_size = loc.shape[0] // n_nodes
                 nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+                if charges is not None:
+                    nodes = torch.cat([nodes, charges.view(-1, 1)], dim=1)
                 edges = loader.dataset.get_edges(batch_size, n_nodes)
                 edges = [edges[0].to(device), edges[1].to(device)]
 
@@ -255,23 +271,22 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
             if rollout:
                 traj_len = args.traj_len
                 
-                # call rollout, get the returned indices, 
-                # retreieve them to get locs true accordingly
-                
                 #print(locs_true.shape)
-                if args.variable_deltaT:
+                if args.varDT:
                     #print(loc_true.shape) #[100, 519, 5, 3]
                     loc_true = loc_true.transpose(0,1).reshape(-1, batch_size*n_nodes, 3) #[519, 500, 3]
                     #print(loc_true.shape)
                     start = 30
-                    locs_pred, steps = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,variable_deltaT=args.variable_deltaT)
+                    locs_pred, steps = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,
+                                                  charges=charges, variable_deltaT=args.variable_deltaT)
                     locs_pred = locs_pred.to(device) # (T,BN,3)
                     end = steps[-1] + start
                     
                     locs_true = loc_true[start:end] #.view(batch_size * n_nodes, steps[-1], 3).transpose(0, 1)
                     
                 else:
-                    locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,num_steps=args.num_timesteps, timesteps=timesteps).to(device)
+                    locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,
+                                           charges=charges, num_steps=args.num_timesteps, timesteps=timesteps).to(device)
                     locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
@@ -279,33 +294,38 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 num_elements = int(0.4 * args.traj_len*args.num_timesteps)  # Calculate 40% of the total elements
                 if args.traj_len*args.num_timesteps >= 50:
                     num_elements = 20
-                sup = first_invalid_idx if first_invalid_idx > 15 else num_elements
+                
+                sup =  num_elements #first_invalid_idx if first_invalid_idx > 15 else
                 
                 locs_pred = locs_pred[:sup]
                 locs_true = locs_true[:sup]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
-                #locs_true = locs_true.transpose(0, 1).contiguous().view(-1, 3)
-                #locs_pred = locs_pred.transpose(0, 1).contiguous().view(-1, 3)
-                
-                print("check reshape:")
-                print(torch.sum(locs_pred-locs_true))
+
+                # print("check reshape:")
+                # print(torch.sum(locs_pred-locs_true))
                 # shape at this moment of locs:(T, B*N,3)
-                #save here preds and targets: shape after: (B, T, N*3)
-                #print(locs_true.shape,locs_pred.shape)
-                locs_true = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
-                locs_pred = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.transpose(0, 1).contiguous().view(-1, 3)
+                #save here preds and targets: .reshape(T, B, N*D).permute(1, 0, 2)
                 
-                print(torch.sum(locs_pred-locs_true))
-                print("checked")
-                exit()
+                if first:
+                    targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ## (B, T )   .reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
+                    preds = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.transpose(0, 1).contiguous().view(-1, 3)
+                    traj_targ = targets
+                    traj_pred = preds
+                    first = False
+                else:
+                    targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
+                    preds = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)
+                    traj_targ = torch.cat((traj_targ, targets), dim=0)
+                    traj_pred = torch.cat((traj_pred, preds), dim=0)
+                
+                # print(torch.sum(locs_pred-locs_true))
+                # print("checked")
+
                 res["tot_num_steps"] += avg_num_steps*batch_size
                 
                 #loss with metric (A-MSE)
                 losses = criterion(locs_pred, locs_true).view(sup, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
-                #print(losses.shape)
-                #print(torch.isnan(losses).any(), torch.isinf(losses).any())
                 losses = torch.mean(losses, dim=(1, 2))
-                #print(losses,torch.max(losses))
                 
                 res['losses'].append(losses.cpu().tolist())
                 loss = torch.mean(losses) 
@@ -343,12 +363,15 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
 
     if rollout:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
+        return res['loss'] / res['counter'], {'targets': traj_targ, 'preds': traj_pred, 'energy_conservation': None}
+        # torch.stack((traj_targ,traj_pred), dim=0)
     else:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
     return res['loss'] / res['counter']
 
 
-def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size,num_steps=10,variable_deltaT=False, timesteps=None):
+def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size, charges=None,
+               num_steps=10,variable_deltaT=False, timesteps=None):
     
     rand_timesteps = timesteps
     vel = v
@@ -389,6 +412,8 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
             
         
         nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+        if charges is not None:
+            nodes = torch.cat([nodes, charges.view(-1, 1)], dim=1)
         rows, cols = edges
         loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
         edge_attr = torch.cat([edge_attr_o, loc_dist], 1).detach()  # concatenate all edge properties

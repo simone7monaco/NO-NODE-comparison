@@ -23,7 +23,8 @@ class NBodyDataset():
             self.suffix += f"_{dataset}{n_balls}_initvel1small"
         else:
             raise Exception("Wrong dataset name %s" % self.dataset_name)
-
+        
+        self.n_balls = n_balls
         self.max_samples = int(max_samples)
         self.dataset_name = dataset_name
         self.data, self.edges = self.load()

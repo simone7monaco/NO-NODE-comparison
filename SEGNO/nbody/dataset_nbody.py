@@ -22,6 +22,7 @@ class NBodyDataset():
         else:
             raise Exception("Wrong dataset name %s" % self.dataset_name)
 
+        self.n_balls = n_balls
         self.max_samples = int(max_samples)
         self.dataset_name = dataset_name
         self.data, self.edges = self.load()
@@ -30,16 +31,22 @@ class NBodyDataset():
         # loc = np.load(osp.join(dir, 'dataset_gravity', 'loc_' + self.suffix + '.npy'))
         loc = np.load(self.data_dir / f'loc_{self.suffix}.npy')
         vel = np.load(self.data_dir / f'vel_{self.suffix}.npy')
-        loc, vel = self.preprocess(loc, vel)
+        charges = np.load(self.data_dir / f'charges_{self.suffix}.npy')
+        loc, vel = self.preprocess(loc, vel, charges)
         return (loc, vel), None
 
-    def preprocess(self, loc, vel):
+    def preprocess(self, loc, vel, charges=None):
         loc, vel = torch.Tensor(loc).transpose(2, 3), torch.Tensor(vel).transpose(2, 3)
+        if charges is not None:
+            charges = torch.Tensor(charges) # [N_sym, n_nodes, 1]
+            # expand charges to match the time dimension
+            charges = charges.unsqueeze(1).expand(-1, loc.size(1), -1, -1)
+            loc = torch.cat((loc, charges), dim=-1)
         n_nodes = loc.size(2)
         loc = loc[0:self.max_samples, :, :, :]  # limit number of samples
         vel = vel[0:self.max_samples, :, :, :]  # speed when starting the trajectory
 
-        return torch.Tensor(loc), torch.Tensor(vel)
+        return loc, vel
 
     def set_max_samples(self, max_samples):
         self.max_samples = int(max_samples)

@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import pickle
 import yaml
 import random
 import numpy as np
@@ -11,7 +12,16 @@ from EGNO.utils import EarlyStopping
 import json
 import wandb
 
-
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise ValueError(f'Invalid boolean value: {value}')
+    
 def get_args():
     parser = argparse.ArgumentParser(description='Main module for SEGNO and EGNO')
     parser.add_argument('model', type=str, choices=['segno', 'egno'],
@@ -27,7 +37,7 @@ def get_args():
     parser.add_argument('--max_samples', type=int, default=3000)
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed (default: 42)')
-    parser.add_argument('--only_test', type=bool, default=True)
+    parser.add_argument('--only_test', type=str2bool, default=False) # WAS true
     parser.add_argument('--traj_len', type=int, default=10,
                         help='Trajectory lenght in case of testing on rollout')
     parser.add_argument('--test_interval', type=int, default=5,
@@ -35,17 +45,17 @@ def get_args():
     parser.add_argument('--n_balls', type=int, default=5,
                         help='Number of balls in the nbody dataset')
     parser.add_argument('--outf', type=Path, default='results', help='Output folder')
-    parser.add_argument('--rollout', type=bool, default=True)
+    parser.add_argument('--rollout', type=str2bool, default=True)
     
     # Experiment parameters
-    parser.add_argument('--varDT', type=bool, default=False)
-    # parser.add_argument('--variable_deltaT', type=bool, default=False)
+    parser.add_argument('--varDT', type=str2bool, default=False)
+    # parser.add_argument('--variable_deltaT', type=str2bool, default=False)
     # TODO: determine the difference between varDT and variable_deltaT
     parser.add_argument('--num_timesteps', type=int, default=10,
                     help='[EGNO only] Valid for EGNO only.') # 2, 5, 10
     parser.add_argument('--num_inputs', type=int, default=1,
-                        help='[EGNO only] The number of inputs to give for each prediction step.') # 1, 2, 3, 4
-    parser.add_argument('--use_wb', type=bool, default=False,
+                        help='The number of inputs to give for each prediction step.') # 1, 2, 3, 4
+    parser.add_argument('--use_wb', type=str2bool, default=False,
                         help='Use wandb for logging')
     return parser.parse_args()
 
@@ -104,6 +114,10 @@ def main(args):
         loader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False)
 
         params = config['model_params'] | dict(varDT=args.varDT, device=device)
+        params['n_inputs'] = args.num_inputs
+        # if args.num_inputs > 1:
+        #     # All dynamical node_features for each input + the static one
+        #     params['in_node_nf'] = (params['in_node_nf'] - 1) * args.num_inputs + 1
         model = SEGNO(**params)
         criterion = [loss_mse,loss_mse_no_red]
         print(args.varDT,args.num_inputs,args.only_test)
@@ -156,13 +170,16 @@ def main(args):
                 print("Early Stopping.")
                 break
         
-    model.load_state_dict(torch.load(model_save_path))
-    test_loss = run_epoch(model, optimizer, criterion, epoch, loader_test, args, backprop=False, rollout=args.rollout)
+    model.load_state_dict(torch.load(model_save_path, weights_only=False))
+    test_loss, trajectories = run_epoch(model, optimizer, criterion, epoch, loader_test, args, backprop=False, rollout=args.rollout)
     results['test loss'].append(test_loss)
         
     json_object = json.dumps(results, indent=4)
     with open(model_save_path.with_suffix('.json'), "w") as outfile:
         outfile.write(json_object)
+
+    with open(model_save_path.with_suffix('.pkl'), 'wb') as f:
+        pickle.dump(trajectories, f)
     
     if args.use_wb:
         wandb.log({"train loss": train_loss, "val loss": val_loss, "test loss": test_loss})
@@ -172,7 +189,7 @@ def main(args):
 
 if __name__ == '__main__':
     args = get_args()
-    best_train_loss, best_val_loss, test_loss, best_epoch = main(args)
+    best_val_loss, test_loss, best_epoch = main(args)
     print(f"Best Val Loss: {best_val_loss}")
     print(f"Best Epoch: {best_epoch}")
     print(f"Test Loss: {test_loss}")
