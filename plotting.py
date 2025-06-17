@@ -403,7 +403,7 @@ def compute_mse_mean_std_per_timestep(tensor_list, metric="MSE"):
     mse_losses_list = []  # To store the MSE losses for each tensor
     mae_losses_list = []
     # Iterate over each tensor in the list and compute MSE loss for each timestep
-    print(np.array(tensor_list).shape) #(10,2,2000,20,15) = (rollout iterations,true/pred, num_samples, T, D) D= #nodes *3 (3dimensions)
+    print(np.array(tensor_list).shape) #(10,2,2000,20,15) = (# runs ,true/pred, num_samples, T, D) D= #nodes *3 (3dimensions)
     for tensor in tensor_list:
         target = tensor[0]  # Shape: (#samples, T, D)
         print(tensor.shape)
@@ -436,7 +436,7 @@ def load_trajectory_config(config, model):
     #_, trajectoriesS = load_pickle_files_suffix(directoryS, config)
     _, trajectoriesE = load_pickle_files_suffix(directoryE, config)
     print("here print trajs shape")
-    print(np.array(trajectoriesE).shape)   # (10,2,2000,20,15) = (rollout iterations,true/pred, num_samples, T, D) D= #nodes *3 (3dimensions)
+    print(np.array(trajectoriesE).shape)   # (10,2,2000,20,15) = (# runs,true/pred, num_samples, T, D) D= #nodes *3 (3dimensions)
 
     return trajectoriesE
 

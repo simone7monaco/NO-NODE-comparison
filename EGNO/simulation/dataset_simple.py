@@ -35,6 +35,7 @@ class NBodyDataset():
         vel = np.load(self.data_dir / f'vel_{self.suffix}.npy')
         edges = np.load(self.data_dir / f'edges_{self.suffix}.npy')
         charges = np.load(self.data_dir / f'charges_{self.suffix}.npy')
+        print(f"Loaded dataset {self.suffix} with {loc.shape[0]} samples, {loc.shape[2]} nodes, {loc.shape[3]} features")
         print(loc.shape, vel.shape, edges.shape, charges.shape)
         loc, vel, edge_attr, edges, charges = self.preprocess(loc, vel, edges, charges)
         return (loc, vel, edge_attr, charges), edges
@@ -59,7 +60,7 @@ class NBodyDataset():
         edges = [rows, cols]
         edge_attr = torch.Tensor(edge_attr).transpose(0, 1).unsqueeze(
             2)  # swap n_nodes <--> batch_size and add nf dimension
-
+        print(edges, edge_attr.shape, edge_attr)
         return torch.Tensor(loc), torch.Tensor(vel), torch.Tensor(edge_attr), edges, torch.Tensor(charges)
 
     def set_max_samples(self, max_samples):
