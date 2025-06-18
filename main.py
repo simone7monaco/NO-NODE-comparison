@@ -144,7 +144,7 @@ def main(args):
 
     optimizer = optim.Adam(model.parameters(), lr=float(config['training_params']['lr']), weight_decay=float(config['training_params']['weight_decay']))
 
-    wandb.init(project="Particle-Physics", entity="egno", config=args, name=model_save_path.stem, mode="online" if args.use_wb else "disabled")
+    wandb.init(project="Particle-Physics", entity="jet-tagging", config=args, name=model_save_path.stem, mode="online" if args.use_wb else "disabled")
     for epoch in range(args.epochs):
         train_loss = run_epoch(model, optimizer, criterion, epoch, loader_train, args)
         results['train loss'].append(train_loss)
@@ -172,9 +172,16 @@ def main(args):
     with open(model_save_path.with_suffix('.json'), "w") as outfile:
         outfile.write(json_object)
 
-    torch.save(Data.from_dict(trajectories), model_save_path.parent / f'{model_save_path.stem}_results.pt')
+    traj_file = model_save_path.parent / f'{model_save_path.stem}_results.pt'
+    traj_data = Data.from_dict(trajectories)
+    torch.save(traj_data, traj_file)
     
     if args.use_wb:
+        clean_name = model_save_path.stem.replace("=", "-")
+
+        artifact = wandb.Artifact(name=clean_name, type='results', description="Trajectory data artifact")
+        artifact.add_file(local_path=traj_file, name=clean_name)
+        artifact.save()
         wandb.log({"train loss": train_loss, "val loss": val_loss, "test loss": test_loss})
         wandb.finish()
     return best_val_loss, test_loss, best_epoch
