@@ -6,7 +6,9 @@ from ..models.model import SEGNO
 from torch_geometric.nn import knn_graph
 from .dataset_nbody import NBodyDataset #from nbody.dataset_nbody import NBodyDataset
 import json
-import wandb    
+import wandb 
+from torch_geometric.utils import to_dense_batch
+
 time_exp_dic = {'time': 0, 'counter': 0}
 
 torch.manual_seed(40)
@@ -153,8 +155,9 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
     res = {'epoch': epoch, 'loss': 0, 'losses': [], "tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'long_loss': {}}
     criterion, loss_mse_no_red = criterion[0], criterion[1]
     n_nodes = args.n_balls
+    if rollout:
+        first = True
 
-    print(f"n nodes: {n_nodes}")
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         for i in range(len(data)):
@@ -214,12 +217,27 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
             for i in range(num_prev-1):
                 loc_list.append(locs[start+steps[i]]) #start from 30
                 start += steps[i]
-            locs_pred = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len,
-                                   num_steps=args.num_timesteps, num_prev=num_prev, h_nodes=h_nodes).to(device)
 
+            locs_pred, energies = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len,
+                                   num_steps=args.num_timesteps, num_prev=num_prev, h_nodes=h_nodes,
+                                   energy_fun=loader.dataset.energy_fun)
+            locs_pred = locs_pred.to(device)
+            #locs_pred shape: [T, BN, 3], energy shape: [T, B, 1]
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
             res["tot_num_steps"] += avg_num_steps*batch_size
             
+            targets = to_dense_batch(locs_true.permute(1,0,2), batch)[0].permute(0, 2, 1, 3) # (B, T, N, 3)
+            preds = to_dense_batch(locs_pred.permute(1,0,2), batch)[0].permute(0, 2, 1, 3) # (B, T, N, 3)
+            energies = energies.permute(1,0,2) # (B, T, 1)
+            if first:
+                traj_targ = targets
+                traj_pred = preds
+                traj_energies = energies
+                first = False
+            else:
+                traj_targ = torch.cat((traj_targ, targets), dim=0)
+                traj_pred = torch.cat((traj_pred, preds), dim=0)
+                traj_energies = torch.cat((traj_energies, energies), dim=0)
 
             #loss with metric (A-MSE)
             losses = loss_mse_no_red(locs_pred, locs_true).view(traj_len, batch_size * n_nodes, 3)
@@ -283,13 +301,12 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
             loss = criterion(loc_pred, loc_end)
 
-        res['loss'] += loss.item()*batch_size
-
         if backprop:    
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            res['counter'] += batch_size
+        
+        res['loss'] += loss.item() * batch_size
         res['counter'] += batch_size
     if rollout:
         res["avg_num_steps"] = res["tot_num_steps"] / res["counter"]
@@ -301,13 +318,17 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
     avg_loss = res['loss'] / res['counter']
     if rollout:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
-        return res['loss'] / res['counter']#, res
+        return avg_loss, {'targets': traj_targ, 'preds': traj_pred, 'energies': traj_energies, 'test_loss': avg_loss}
+        # TODO: then check rollout calculation for the loss
     else:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
-        return res['loss'] / res['counter']#, res
+        return avg_loss
 
 
-def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len,num_steps=10, num_prev=1, h_nodes=None):
+@torch.no_grad()
+def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, 
+               traj_len,num_steps=10, num_prev=1, h_nodes=None,
+               energy_fun=None):
 
     step = num_steps
     vel = v
@@ -317,6 +338,7 @@ def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len,num
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
     loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
     
+    energies = []
     for i in range(traj_len):
         
         if num_prev > 1 and (i + 1) < num_prev:
@@ -343,9 +365,12 @@ def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, traj_len,num
             loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
             edge_attr = loc_dist.detach()
             loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, T=step)
+        
+        if energy_fun is not None:
+            energies.append(energy_fun(loc, vel, h_nodes, batch=batch))
 
-    
-    return loc_preds
+    energies = torch.tensor(np.stack(energies)).unsqueeze(-1) if energy_fun is not None else None
+    return loc_preds, energies
 
 def pearson_correlation_batch(x, y, N):
     """

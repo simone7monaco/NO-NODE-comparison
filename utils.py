@@ -1,4 +1,5 @@
 import numpy as np
+from torch_geometric.utils import to_dense_batch
 
 def reshape_sample(sample):
     """
@@ -26,24 +27,26 @@ def tot_energy_spring(loc, vel, edges, interaction_strength=.1):
 
 def tot_energy_charged(loc, vel, edges, interaction_strength=1):
         """
-        loc: np.array of shape (T, 3, N)
-        vel: np.array of shape (T, 3, N)
+        loc: np.array of shape (3, N)
+        vel: np.array of shape (3, N)
         edges: np.array of shape (N, N) with interaction strengths
         """
-        K = 0.5 * (vel ** 2).sum()
-        N = loc.shape[2]
-        
-        # Pairwise differences: shape (T, 3, N, N)
-        diff = loc[:, :, :, None] - loc[:, :, None, :]  # (T, 3, N, N)
-        dist = np.sqrt(np.sum(diff ** 2, axis=1))       # (T, N, N)
-        np.fill_diagonal(dist[0], np.inf)
-        inv_dist = np.where(dist > 0, 1.0 / dist, 0.0)
+        # disables division by zero warning, since I fix it with fill_diagonal
+        with np.errstate(divide='ignore'):
 
-        # Symmetric interactions (i != j) – sum over upper triangle to avoid double-counting
-        triu_mask = np.triu(np.ones((N, N)), k=1)[None, :, :]  # shape (1, N, N)
-
-        U = interaction_strength * np.sum(inv_dist * edges[None, :, :] * triu_mask)
-        return U + K
+            # K = 0.5 * (vel ** 2).sum()
+            K = (0.5 * np.linalg.norm(vel, axis=1)**2).sum()
+            U = 0
+            for i in range(loc.shape[1]):
+                for j in range(loc.shape[1]):
+                    if i != j:
+                        r = loc[:, i] - loc[:, j]
+                        # dist = np.sqrt((r ** 2).sum())
+                        # if overflow occurs, return np.inf
+                        dist = np.linalg.norm(r)
+                        U += 0.5 * interaction_strength * edges[
+                            i, j] / dist
+            return U + K
 
 
 def tot_energy_gravity(pos, vel, mass, G=1.0):
@@ -70,6 +73,36 @@ def tot_energy_gravity(pos, vel, mass, G=1.0):
         PE = G * np.sum(np.sum(np.triu(-(mass*mass.T)*inv_r, 1)))
 
         return KE, PE, KE+PE
+
+def conserved_energy_fun(dataset, loc, vel, edges, batch=None):
+    if batch is not None:
+        edge_matr, _ = to_dense_batch(edges, batch)
+        edge_matr = edge_matr.cpu().detach().numpy().repeat(edge_matr.shape[1], axis=2)
+        edge_matr = np.einsum('tij,tji ->tij', edge_matr, edge_matr)
+        nploc, _ = to_dense_batch(loc, batch)
+        npvel, _ = to_dense_batch(vel, batch)
+        nploc = nploc.cpu().detach().numpy().transpose(0, 2, 1)  # (B, 3, N)
+        npvel = npvel.cpu().detach().numpy().transpose(0, 2, 1)  # (B, 3, N)
+    elif edges.size(-1) != edges.size(-2):
+        raise ValueError("Edge matrix must be square when batch is None.")
+    else:
+        edge_matr = edges.unsqueeze(0).cpu().detach().numpy()
+        nploc = loc.unsqueeze(0).cpu().detach().numpy().transpose(0, 2, 1)  # (1, 3, N)
+        npvel = vel.unsqueeze(0).cpu().detach().numpy().transpose(0, 2, 1)  # (1, 3, N)
+
+    if dataset == "charged":
+        energy_fun = tot_energy_charged
+    elif dataset == "gravity":
+        energy_fun = tot_energy_gravity
+    elif dataset == "spring":
+        energy_fun = tot_energy_spring
+    else:
+        raise ValueError(f"Unknown dataset: {dataset}. Supported datasets are 'charged', 'gravity', and 'spring'.")
+    
+    energies = np.zeros(nploc.shape[0])
+    for i in range(nploc.shape[0]):
+        energies[i] = energy_fun(nploc[i], npvel[i], edge_matr[i])
+    return energies
 
 def compute_energy_drift(loc, vel, edges):
     """

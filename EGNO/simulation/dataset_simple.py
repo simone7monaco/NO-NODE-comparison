@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 from pathlib import Path
+from utils import conserved_energy_fun
+from torch_geometric.utils import to_dense_batch
 
 
 class NBodyDataset():
@@ -27,16 +29,21 @@ class NBodyDataset():
         self.n_balls = n_balls
         self.max_samples = int(max_samples)
         self.dataset_name = dataset_name
+        self.dataset = dataset
         self.data, self.edges = self.load()
+        
+    def energy_fun(self, loc, vel, edges, batch=None):
+        return conserved_energy_fun(self.dataset, loc, vel, edges, batch=batch)
 
     def load(self):
-        dir = self.data_dir
         loc = np.load(self.data_dir / f'loc_{self.suffix}.npy')
         vel = np.load(self.data_dir / f'vel_{self.suffix}.npy')
-        edges = np.load(self.data_dir / f'edges_{self.suffix}.npy')
+        # edges = np.load(self.data_dir / f'edges_{self.suffix}.npy')
         charges = np.load(self.data_dir / f'charges_{self.suffix}.npy')
+        mat_charges = charges.repeat(charges.shape[1], axis=2)
+        edges = np.einsum('tij,tji ->tij', mat_charges, mat_charges)
         print(f"Loaded dataset {self.suffix} with {loc.shape[0]} samples, {loc.shape[2]} nodes, {loc.shape[3]} features")
-        print(loc.shape, vel.shape, edges.shape, charges.shape)
+        
         loc, vel, edge_attr, edges, charges = self.preprocess(loc, vel, edges, charges)
         return (loc, vel, edge_attr, charges), edges
 
@@ -60,7 +67,7 @@ class NBodyDataset():
         edges = [rows, cols]
         edge_attr = torch.Tensor(edge_attr).transpose(0, 1).unsqueeze(
             2)  # swap n_nodes <--> batch_size and add nf dimension
-        print(edges, edge_attr.shape, edge_attr)
+        # print(edges, edge_attr.shape, edge_attr)
         return torch.Tensor(loc), torch.Tensor(vel), torch.Tensor(edge_attr), edges, torch.Tensor(charges)
 
     def set_max_samples(self, max_samples):

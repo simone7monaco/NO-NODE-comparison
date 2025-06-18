@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
+from torch_geometric.data import Data
 from EGNO.utils import EarlyStopping
 import json
 import wandb
@@ -29,15 +30,15 @@ def get_args():
     parser.add_argument('--exp_name', type=str, default='exp_2', help='Experiment name')
     parser.add_argument('--config', type=str, default='model_confs.yaml')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size.')
-    parser.add_argument('--epochs', type=int, default=1000,
+    parser.add_argument('--epochs', type=int, default=500, # 1000,
                         help='number of epochs to train (default: 1000)')
     parser.add_argument('--data_dir', type=Path, default='data')
-    parser.add_argument('--dataset', type=str, default='charged', choices=['charged', 'gravity'], #select dataset
+    parser.add_argument('--dataset', type=str, default='charged', choices=['charged', 'gravity'],
                         help='Dataset to use (default: charged)')
     parser.add_argument('--max_samples', type=int, default=3000)
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed (default: 42)')
-    parser.add_argument('--only_test', type=str2bool, default=False) # WAS true
+    parser.add_argument('--only_test', type=str2bool, default=False)
     parser.add_argument('--traj_len', type=int, default=10,
                         help='Trajectory lenght in case of testing on rollout')
     parser.add_argument('--test_interval', type=int, default=5,
@@ -48,26 +49,16 @@ def get_args():
     parser.add_argument('--rollout', type=str2bool, default=True)
     
     # Experiment parameters
-    parser.add_argument('--varDT', type=str2bool, default=False)
-    # parser.add_argument('--variable_deltaT', type=str2bool, default=False)
-    # TODO: determine the difference between varDT and variable_deltaT
-    parser.add_argument('--num_timesteps', type=int, default=10,
-                    help='[EGNO only] Valid for EGNO only.') # 2, 5, 10
-    parser.add_argument('--num_inputs', type=int, default=1,
-                        help='The number of inputs to give for each prediction step.') # 1, 2, 3, 4
+    parser.add_argument('--varDT', type=str2bool, default=False, choices=[True, False],)
+    
+    parser.add_argument('--num_timesteps', type=int, default=10, choices=[2, 5, 10],
+                    help='Distance in time between one snaphot an the other.')
+    parser.add_argument('--num_inputs', type=int, default=1, choices=[1, 2, 3, 4],
+                        help='The number of inputs to give for each prediction step.')
     parser.add_argument('--use_wb', type=str2bool, default=False,
                         help='Use wandb for logging')
     return parser.parse_args()
 
-
-sweep_params = {
-    'n_balls': [5, 10],
-    'num_inputs': [1, 2, 3, 4],
-    'varDT': [True, False],
-    'num_timesteps': [2, 5, 10],
-    'seed': list(range(42, 52)),
-    }
-    
 
 def main(args):
     with open(args.config, 'r') as f:
@@ -178,8 +169,7 @@ def main(args):
     with open(model_save_path.with_suffix('.json'), "w") as outfile:
         outfile.write(json_object)
 
-    with open(model_save_path.with_suffix('.pkl'), 'wb') as f:
-        pickle.dump(trajectories, f)
+    torch.save(Data.from_dict(trajectories), model_save_path.parent / f'{model_save_path.stem}_results.pt')
     
     if args.use_wb:
         wandb.log({"train loss": train_loss, "val loss": val_loss, "test loss": test_loss})

@@ -6,6 +6,7 @@ import torch.utils.data
 from .simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
 from .model.egno import EGNO
 from .utils import EarlyStopping, cumulative_random_tensor_indices_capped, random_ascending_tensor
+from torch_geometric.utils import to_dense_batch
 import os
 from torch import nn, optim
 import json
@@ -272,7 +273,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 traj_len = args.traj_len
                 
                 #print(locs_true.shape)
-                if args.varDT:
+                if False: #variable_deltaT
                     #print(loc_true.shape) #[100, 519, 5, 3]
                     loc_true = loc_true.transpose(0,1).reshape(-1, batch_size*n_nodes, 3) #[519, 500, 3]
                     #print(loc_true.shape)
@@ -285,8 +286,10 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                     locs_true = loc_true[start:end] #.view(batch_size * n_nodes, steps[-1], 3).transpose(0, 1)
                     
                 else:
-                    locs_pred = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,
-                                           charges=charges, num_steps=args.num_timesteps, timesteps=timesteps).to(device)
+                    locs_pred, energies, energies_allsteps = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,
+                                                                        charges=charges, num_steps=args.num_timesteps, timesteps=timesteps, 
+                                                                        energy_fun=loader.dataset.energy_fun)
+                    locs_pred = locs_pred.to(device)
                     locs_true = loc_true.view(batch_size * n_nodes, args.num_timesteps*traj_len, 3).transpose(0, 1)
 
                 corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred, locs_true, n_nodes) #locs_pred[::10]
@@ -299,49 +302,46 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 
                 locs_pred = locs_pred[:sup]
                 locs_true = locs_true[:sup]
+                energies_allsteps = energies_allsteps[:sup]
                 #print(torch.isnan(locs_pred).any(), torch.isinf(locs_pred).any())
 
                 # print("check reshape:")
                 # print(torch.sum(locs_pred-locs_true))
                 # shape at this moment of locs:(T, B*N,3)
-                #save here preds and targets: .reshape(T, B, N*D).permute(1, 0, 2)
-                
+                batch = torch.arange(batch_size).repeat_interleave(n_nodes).to(locs_pred.device)  # [BN]
+                targets = to_dense_batch(locs_true.permute(1,0,2), batch)[0].permute(0, 2, 1, 3) # (B, T, N, 3)
+                preds = to_dense_batch(locs_pred.permute(1,0,2), batch)[0].permute(0, 2, 1, 3) # (B, T, N, 3)
+                energies_allsteps = energies_allsteps.permute(1,0,2) # (B, T, 1)
                 if first:
-                    targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ## (B, T )   .reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
-                    preds = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.transpose(0, 1).contiguous().view(-1, 3)
                     traj_targ = targets
                     traj_pred = preds
+                    traj_energies = energies_allsteps
                     first = False
                 else:
-                    targets = locs_true.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)   ##.reshape(B, T, N * D)  ###.transpose(0, 1).contiguous().view(-1, 3)
-                    preds = locs_pred.reshape(sup, batch_size, n_nodes * 3).permute(1, 0, 2)
                     traj_targ = torch.cat((traj_targ, targets), dim=0)
                     traj_pred = torch.cat((traj_pred, preds), dim=0)
+                    traj_energies = torch.cat((traj_energies, energies_allsteps), dim=0)
                 
                 # print(torch.sum(locs_pred-locs_true))
                 # print("checked")
 
-                res["tot_num_steps"] += avg_num_steps*batch_size
+                res["tot_num_steps"] += avg_num_steps*batch_size # TODO: take inspiration
                 
                 #loss with metric (A-MSE)
                 losses = criterion(locs_pred, locs_true).view(sup, batch_size * n_nodes, 3) #args.num_timesteps*traj_len
                 losses = torch.mean(losses, dim=(1, 2))
-                
-                res['losses'].append(losses.cpu().tolist())
                 loss = torch.mean(losses) 
-                
+                res['losses'].append(losses.cpu().tolist())
             else:
                 loc_end = loc_true.view(batch_size * n_nodes, args.num_timesteps, 3).transpose(0, 1).contiguous().view(-1, 3)
                 loc_pred, vel_pred, _ = model(loc, nodes, edges, edge_attr, v=vel, loc_mean=loc_mean, rand_timesteps=timesteps)
                 #pearson_correlation_batch(loc_pred.reshape(args.num_timesteps,batch_size * n_nodes, 3),loc_end,n_nodes)
                 losses = criterion(loc_pred, loc_end).view(args.num_timesteps, batch_size * n_nodes, 3)
                 losses = torch.mean(losses, dim=(1, 2))
-                loss = torch.mean(losses)
-                
+                loss = torch.mean(losses)        
         else:
             raise Exception("Wrong model")
         
-
         if backprop:
             loss.backward()
             optimizer.step()
@@ -363,19 +363,22 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
 
     if rollout:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
-        return res['loss'] / res['counter'], {'targets': traj_targ, 'preds': traj_pred, 'energy_conservation': None}
+        return avg_loss, {'targets': traj_targ, 'preds': traj_pred, 'energy_conservation': traj_energies, 'test_loss': avg_loss}
         # torch.stack((traj_targ,traj_pred), dim=0)
     else:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
-    return res['loss'] / res['counter']
+    return avg_loss
 
-
-def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_nodes, traj_len, batch_size, charges=None,
-               num_steps=10,variable_deltaT=False, timesteps=None):
+@torch.no_grad()
+def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, 
+               loc_mean, n_nodes, traj_len, batch_size, charges=None,
+               num_steps=10,variable_deltaT=False, timesteps=None, 
+               energy_fun=None):
     
     rand_timesteps = timesteps
     vel = v
     BN = batch_size*n_nodes
+    batch = torch.arange(batch_size).repeat_interleave(n_nodes).to(loc.device)  # [BN]
     if variable_deltaT:
     #   calculate random indices
         steps, steps_size = cumulative_random_tensor_indices_capped(N=traj_len,start=1,end=num_steps+3, MAX=num_steps*traj_len)
@@ -387,10 +390,13 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
     else:
         loc_preds = torch.zeros((traj_len,batch_size*num_steps*n_nodes,3))
 
+    energies = []
+    energies_allsteps = []
     for i in range(traj_len):
         #print("Inside loop \n")
         
         if variable_deltaT:
+            raise NotImplementedError("It should not be used with rollout")
             #print(i,steps[i],steps_size[i])
             if i == 0:
                 loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean, num_timesteps=steps_size[i])
@@ -407,8 +413,10 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
             loc, vel, _ = model(loc.detach(), nodes, edges, edge_attr,v=vel.detach(), loc_mean=loc_mean, rand_timesteps=rand_timesteps)
             rand_timesteps=None
             loc_preds[i] = loc
-            loc = loc.view(num_steps,-1, loc.shape[-1])[-1]  #.transpose(0,1)[-1] #get last element in the inner trajectory
-            vel = vel.view(num_steps, -1, vel.shape[-1])[-1] #get last element in the inner trajectory
+            loc_all = loc.view(num_steps,-1, loc.shape[-1])  #shape: [num_steps, BN, 3]
+            vel_all = vel.view(num_steps, -1, vel.shape[-1]) #shape: [num_steps, BN, 3]
+            loc = loc_all[-1]  #get last element in the inner trajectory
+            vel = vel_all[-1] #get last element in the inner trajectory
             
         
         nodes = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
@@ -420,19 +428,20 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr, loc_mean, n_
         loc = loc.view(-1, n_nodes, loc.shape[-1])
         loc_mean = loc.mean(dim=1, keepdim=True).repeat(1, n_nodes, 1).view(-1, loc.size(2))
         loc = loc.view(-1, loc.shape[-1])
-        # print("loc \t")
-        # print(torch.isnan(loc).any(), torch.isinf(loc).any())
-        # print("nodes \t")
-        # print(torch.isnan(nodes).any(), torch.isinf(nodes).any())
-        # print("edge attr \t")
-        # print(torch.isnan(edge_attr).any(), torch.isinf(edge_attr).any())
-        # print("loc mean \t")
-        # print(torch.isnan(loc_mean).any(), torch.isinf(loc_mean).any())
     
+        if energy_fun is not None:
+            for j in range(num_steps):
+                en = energy_fun(loc_all[j], vel_all[j], nodes[:, -1:], batch=batch)
+                energies_allsteps.append(en)
+                if j == num_steps-1:
+                    energies.append(en)
+    
+    energies = torch.tensor(np.stack(energies)).unsqueeze(-1) if energy_fun is not None else None
+    energies_allsteps = torch.tensor(np.stack(energies_allsteps)).unsqueeze(-1) if energy_fun is not None else None
     # print("\n outside loop \n")
     if not variable_deltaT:
         loc_preds = loc_preds.reshape(traj_len*num_steps, -1, 3)
-        return loc_preds
+        return loc_preds, energies, energies_allsteps
     else:
         loc_preds = loc_preds.reshape(tot_num_step, -1, 3)
         return loc_preds, steps

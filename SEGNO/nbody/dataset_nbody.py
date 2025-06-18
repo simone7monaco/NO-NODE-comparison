@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+from utils import conserved_energy_fun
+from torch_geometric.utils import to_dense_batch
 
 
 class NBodyDataset():
@@ -25,7 +27,11 @@ class NBodyDataset():
         self.n_balls = n_balls
         self.max_samples = int(max_samples)
         self.dataset_name = dataset_name
+        self.dataset = dataset
         self.data, self.edges = self.load()
+
+    def energy_fun(self, loc, vel, edges, batch=None):
+        return conserved_energy_fun(self.dataset, loc, vel, edges, batch=batch)
 
     def load(self):
         # loc = np.load(osp.join(dir, 'dataset_gravity', 'loc_' + self.suffix + '.npy'))
