@@ -25,7 +25,7 @@ def str2bool(value):
     
 def get_args():
     parser = argparse.ArgumentParser(description='Main module for SEGNO and EGNO')
-    parser.add_argument('model', type=str, choices=['segno', 'egno'],
+    parser.add_argument('--model', type=str, choices=['segno', 'egno'], required=True, 
                         help='Model to use: segno or egno')
     parser.add_argument('--exp_name', type=str, default='exp_2', help='Experiment name')
     parser.add_argument('--config', type=str, default='model_confs.yaml')
@@ -63,6 +63,9 @@ def get_args():
 def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)[args.model.upper()]
+
+    if args.num_inputs > 1 and args.varDT:
+        raise ValueError("Variable DT is not supported with multiple inputs.")
 
     print(args)
     args.data_dir = Path(args.data_dir)

@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from ...models.models.gcl import GCL, E_GCL, E_GCL_ERGN_vel
 
@@ -22,7 +23,7 @@ class SEGNO(nn.Module):
                                                         norm_diff=norm_diff, tanh=tanh, norm_vel=norm_vel)
         
         if n_inputs > 1:
-            self.seq_encoder = EquivariantSequenceEncoder((in_node_nf - 1) * n_inputs + 1, in_node_nf, attn_hidden=hidden_nf)
+            self.enc_attn_net = InvariantTemporalAttention(in_node_nf)
 
         if not emp:
             self.decoder = nn.Sequential(nn.Linear(hidden_nf, hidden_nf),
@@ -44,7 +45,7 @@ class SEGNO(nn.Module):
         Loc, vel can be n_inputs * 3 as dimension if n_inputs > 1
         """
         if len(loc.size()) == 3: # we are in the case of n_inputs > 1, loc is [n_inputs, batch_size*n_balls, 3]
-            his, loc, vel = self.seq_encoder(loc, vel, his) 
+            loc, vel, his = self.prepare_node_inputs(loc, vel, his)
         
         his = self.embedding(his)
         n_layers = T if self.varDT else 7 # *self.n_layers 7
@@ -64,6 +65,41 @@ class SEGNO(nn.Module):
             h = h + his
 
         return x, h, v
+    
+    def prepare_node_inputs(self, loc_seq, vel_seq, his_seq):
+        """
+        loc_seq: (BN, T, 3)
+        vel_seq: (BN, T, 3)
+        his_seq: (BN, T, F)
+
+        Returns:
+        - loc_init: (BN, 3)
+        - vel_init: (BN, 3)
+        - his_init: (BN, F)
+        """
+        attn = self.enc_attn_net(vel_seq, his_seq)  # (BN, T, 1)
+
+        # Weighted sum over time
+        loc_init = (attn * loc_seq).sum(dim=1)  # (BN, 3)
+        vel_init = (attn * vel_seq).sum(dim=1)  # (BN, 3)
+        his_init = (attn * his_seq).sum(dim=1)  # (BN, F)
+
+        return loc_init, vel_init, his_init
+    
+class InvariantTemporalAttention(nn.Module):
+    def __init__(self, in_dim, hidden_dim=32):
+        super().__init__()
+        self.attn_mlp = nn.Sequential(
+            nn.Linear(in_dim+1, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, 1)
+        )
+
+    def forward(self, vel_seq, his_seq):
+        speed = vel_seq.norm(dim=-1, keepdim=True)  # (N, T, 1)
+        feats = torch.cat([speed, his_seq], dim=-1)  # (N, T, F+1)
+        attn_weights = self.attn_mlp(feats).softmax(dim=1)
+        return attn_weights
     
 
 class EquivariantSequenceEncoder(nn.Module):
@@ -88,7 +124,7 @@ class EquivariantSequenceEncoder(nn.Module):
         his_seq: (N, T, F)  # optional
         """
         # 1) aggregate positions by mean
-        loc_init = loc_seq.mean(dim=1)   # (B, N, 3)
+        loc_init = loc_seq.mean(dim=1)   # (N, 3)
 
         # 2) compute attention weights over speeds
         speeds = vel_seq.norm(dim=-1, keepdim=True)  # (N, T, 1)

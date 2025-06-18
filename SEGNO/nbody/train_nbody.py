@@ -199,7 +199,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
         if rollout:
             
             start = 30
-            end = start + args.num_timesteps
+            end = start + args.num_inputs*traj_len
             steps = None
             traj_len = args.traj_len
             if varDt: 
@@ -211,14 +211,24 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 locs_true = locs[end:args.num_timesteps*traj_len+end:args.num_timesteps].to(device)
             num_prev = args.num_inputs
             loc_list = []
+            vel_list = []
             half_step = args.num_timesteps
             steps = steps if steps is not None else [half_step for _ in range(num_prev)]
             loc_list.append(locs[start])
             for i in range(num_prev-1):
                 loc_list.append(locs[start+steps[i]]) #start from 30
+                vel_list.append(vels[start+steps[i]])
                 start += steps[i]
 
-            locs_pred, energies = rollout_fn(model,h, loc_list, edge_index, vel, edge_attr, batch, traj_len,
+            loc_list = torch.stack(loc_list, dim=0).squeeze().permute(1, 0, 2) # [BN, (num_prev,) 3]
+            vel_list = torch.stack(vel_list, dim=0).squeeze().permute(1, 0, 2) # [BN, (num_prev,) 3]
+            if num_prev > 1: # recompute h for all num_prevs
+                h = torch.sqrt(torch.sum(vel_list ** 2, dim=-1)).T.unsqueeze(-1) # (T, BN, 1)
+                if h_nodes is not None:
+                    h = torch.cat((h, h_nodes.unsqueeze(0).expand(h.shape[0], -1, -1)), 
+                                  dim=-1).permute(1, 0, 2).contiguous().detach()
+            # loc_list = loc_list.permute(1,
+            locs_pred, energies = rollout_fn(model, h, loc_list, edge_index, vel_list, edge_attr, batch, traj_len,
                                    num_steps=args.num_timesteps, num_prev=num_prev, h_nodes=h_nodes,
                                    energy_fun=loader.dataset.energy_fun)
             locs_pred = locs_pred.to(device)
@@ -263,9 +273,11 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 vel = vels[start + np.cumsum([0] + steps[:-1])].transpose(0, 1).contiguous()
                 loc_end = locs[start + np.sum(steps)]
 
-                h = torch.sqrt(torch.sum(vel ** 2, dim=-1)).T # H for each input
+                h = torch.sqrt(torch.sum(vel ** 2, dim=-1)).T.unsqueeze(-1) # H (T, BN, 1)
                 if h_nodes is not None:
-                    h = torch.cat((h, h_nodes), dim=1).detach()
+
+                    h = torch.cat((h, h_nodes.unsqueeze(0).expand(h.shape[0], -1, -1)), 
+                                  dim=-1).permute(1, 0, 2).contiguous().detach() 
 
                 loc_pred, h, _ = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, T=sum(steps))
                 
@@ -318,7 +330,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
     avg_loss = res['loss'] / res['counter']
     if rollout:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
-        return avg_loss, {'targets': traj_targ, 'preds': traj_pred, 'energies': traj_energies, 'test_loss': avg_loss}
+        return avg_loss, {'targets': traj_targ, 'preds': traj_pred, 'energies': traj_energies, 'test_loss': avg_loss, 'traj_losses': res['losses']}
         # TODO: then check rollout calculation for the loss
     else:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
@@ -326,48 +338,48 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
 
 
 @torch.no_grad()
-def rollout_fn(model, h, loc_list, edge_index, v, edge_attr, batch, 
+def rollout_fn(model, h, loc, edge_index, vel, edge_attr, batch, 
                traj_len,num_steps=10, num_prev=1, h_nodes=None,
                energy_fun=None):
 
     step = num_steps
-    vel = v
     prev = None
     prevs = 0
-    loc = loc_list[0]
+    # loc = loc_list[0]  # observed
+    # vel = v
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[1]))
-    loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr)
+    # loc, _, vel = model(h, loc, edge_index, vel, edge_attr)
     
     energies = []
     for i in range(traj_len):
-        
-        if num_prev > 1 and (i + 1) < num_prev:
-            prev = loc   #predicted
-            prevs +=1
-            loc_preds[i] = loc
-            loc = loc_list[prevs] #observed
-            
-            edge_index = knn_graph(loc, 4, batch)
-            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
-            if h_nodes is not None:
-                h = torch.cat((h, h_nodes), dim=1).detach()
-            rows, cols = edge_index
-            loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
-            edge_attr = loc_dist.detach()
-            loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, prev, T=step)
-        else:
-            loc_preds[i] = loc
-            edge_index = knn_graph(loc, 4, batch)
-            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
-            if h_nodes is not None:
-                h = torch.cat((h, h_nodes), dim=1).detach()
-            rows, cols = edge_index
-            loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
-            edge_attr = loc_dist.detach()
-            loc, _, vel = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, T=step)
+        loc_p, _, vel_p = model(h, loc.detach(), edge_index, vel.detach(), edge_attr, T=step)
         
         if energy_fun is not None:
-            energies.append(energy_fun(loc, vel, h_nodes, batch=batch))
+            energies.append(energy_fun(loc_p, vel_p, h_nodes, batch=batch))
+        
+        loc_preds[i] = loc_p
+
+        if num_prev > 1 and (i + 1) < num_prev: # TODO: here num_inputs?
+            # assume loc to have shape (BN, T, 3), remove the first T and concat the predicted loc, same for vel
+            loc = torch.cat((loc[:, :1, :], loc_p.unsqueeze(1)), dim=1)  # (BN, T, 3)
+            vel = torch.cat((vel[:, :1, :], vel_p.unsqueeze(1)), dim=1)  # (BN, T, 3)
+            h_new = torch.sqrt(torch.sum(vel_p ** 2, dim=1)).unsqueeze(1).detach()
+            h_nodes = torch.cat((h[:, :1, :], 
+                                 torch.cat((h_new, h_nodes), dim=1).unsqueeze(1)), 
+                                dim=1)
+            
+            edge_index = knn_graph(loc[:, 0, :], 4, batch) 
+        else:
+            loc = loc_p  # predicted
+            edge_index = knn_graph(loc, 4, batch)
+            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+            if h_nodes is not None:
+                h = torch.cat((h, h_nodes), dim=1).detach()
+
+        rows, cols = edge_index
+        edge_attr = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
+
+        
 
     energies = torch.tensor(np.stack(energies)).unsqueeze(-1) if energy_fun is not None else None
     return loc_preds, energies
