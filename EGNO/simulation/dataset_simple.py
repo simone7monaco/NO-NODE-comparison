@@ -36,8 +36,14 @@ class NBodyDataset():
         return conserved_energy_fun(self.dataset, loc, vel, edges, batch=batch)
 
     def load(self):
-        loc = np.load(self.data_dir / f'loc_{self.suffix}.npy')
+        loc = np.load(self.data_dir / f'loc_{self.suffix}.npy') # shape (n_samples, n_timesteps, n_balls, 3)
         vel = np.load(self.data_dir / f'vel_{self.suffix}.npy')
+        if loc.shape[-2:] != (self.n_balls, 3):
+            # should transpose the last two dimensions
+            loc = np.transpose(loc, (0, 1, 3, 2))
+            vel = np.transpose(vel, (0, 1, 3, 2))
+            assert (loc.shape[-2:] == (self.n_balls, 3) and vel.shape[-2:] == (self.n_balls, 3)), "Shape mismatch!"
+
         # edges = np.load(self.data_dir / f'edges_{self.suffix}.npy')
         charges = np.load(self.data_dir / f'charges_{self.suffix}.npy')
         mat_charges = charges.repeat(charges.shape[1], axis=2)
@@ -49,7 +55,7 @@ class NBodyDataset():
 
     def preprocess(self, loc, vel, edges, charges):
         # cast to torch and swap n_nodes <--> n_features dimensions
-        loc, vel = torch.Tensor(loc).transpose(2, 3), torch.Tensor(vel).transpose(2, 3)
+        loc, vel = torch.tensor(loc).float(), torch.tensor(vel).float()
         n_nodes = loc.size(2)
         loc = loc[0:self.max_samples, :, :, :]  # limit number of samples
         vel = vel[0:self.max_samples, :, :, :]  # speed when starting the trajectory
@@ -65,10 +71,10 @@ class NBodyDataset():
                     rows.append(i)
                     cols.append(j)
         edges = [rows, cols]
-        edge_attr = torch.Tensor(edge_attr).transpose(0, 1).unsqueeze(
+        edge_attr = torch.tensor(edge_attr).float().transpose(0, 1).unsqueeze(
             2)  # swap n_nodes <--> batch_size and add nf dimension
         # print(edges, edge_attr.shape, edge_attr)
-        return torch.Tensor(loc), torch.Tensor(vel), torch.Tensor(edge_attr), edges, torch.Tensor(charges)
+        return loc, vel, edge_attr, edges, torch.tensor(charges).float()
 
     def set_max_samples(self, max_samples):
         self.max_samples = int(max_samples)
@@ -198,7 +204,7 @@ class NBodyDynamicsDataset(NBodyDataset):
             idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
             loc_inputs = loc[frame_0 + idxs]
             vel_inputs = vel[frame_0 + idxs]
-            
+            # TODO: cosa fanno edge_attr?
             return loc_inputs, vel_inputs, edge_attr, charges, locs
 
         

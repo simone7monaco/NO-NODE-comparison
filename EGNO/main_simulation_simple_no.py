@@ -201,8 +201,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
     
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
-        loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[B, 5, T, 3]
-         #loc.shape : [B, num_inputs, 5, 3]
+        loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[B, N, T, 3]
+         #loc.shape : [B, num_inputs, N, 3], edge_attr.shape: [B, num_inputs*N, 1]
         
         n_nodes = args.n_balls
         optimizer.zero_grad()
@@ -212,7 +212,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
             if args.num_inputs > 1 : #and rollout
                 
                 start = 30
-                loc = loc.transpose(0,1) #T,100,5,3
+                loc = loc.transpose(0,1) #T,B,N,3
                 vel = vel.transpose(0,1)
                 
                 if args.varDT:
@@ -220,7 +220,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                     loc = loc[start + timesteps]
                     vel = vel[start + timesteps]
                 
-                batch_size = args.batch_size 
+                batch_size = loc.shape[1]
                 edges = loader.dataset.get_edges(batch_size, n_nodes)
                 edges = [edges[0].to(device), edges[1].to(device)]
                 rows, cols = edges

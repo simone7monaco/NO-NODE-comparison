@@ -30,7 +30,7 @@ def get_args():
     parser.add_argument('--exp_name', type=str, default='exp_2', help='Experiment name')
     parser.add_argument('--config', type=str, default='model_confs.yaml')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size.')
-    parser.add_argument('--epochs', type=int, default=500, # 1000,
+    parser.add_argument('--epochs', type=int, default=700, # 1000,
                         help='number of epochs to train (default: 1000)')
     parser.add_argument('--data_dir', type=Path, default='data')
     parser.add_argument('--dataset', type=str, default='charged', choices=['charged', 'gravity'],
@@ -51,9 +51,9 @@ def get_args():
     # Experiment parameters
     parser.add_argument('--varDT', type=str2bool, default=False, choices=[True, False],)
     
-    parser.add_argument('--num_timesteps', type=int, default=10, choices=[2, 5, 10],
+    parser.add_argument('--num_timesteps', type=int, default=10, #choices=[2, 5, 10],
                     help='Distance in time between one snaphot an the other.')
-    parser.add_argument('--num_inputs', type=int, default=1, choices=[1, 2, 3, 4],
+    parser.add_argument('--num_inputs', type=int, default=1, #choices=[1, 2, 3, 4],
                         help='The number of inputs to give for each prediction step.')
     parser.add_argument('--use_wb', type=str2bool, default=False,
                         help='Use wandb for logging')
@@ -79,7 +79,7 @@ def main(args):
     args.device = device
 
     # Common objects
-    model_save_path = args.outf / args.exp_name / args.model / f'seed={seed}_n_part={args.n_balls}_n_inputs={args.num_inputs}_varDT={args.varDT}_num_timesteps={args.num_timesteps}.pth'
+    model_save_path = args.outf / args.exp_name / args.model / f'{args.dataset}_seed={seed}_n_part={args.n_balls}_n_inputs={args.num_inputs}_varDT={args.varDT}_num_timesteps={args.num_timesteps}.pth'
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
     print(f'Model saved to {model_save_path}')
     early_stopping = EarlyStopping(patience=25, verbose=True, path=model_save_path)
@@ -116,6 +116,9 @@ def main(args):
         criterion = [loss_mse,loss_mse_no_red]
         print(args.varDT,args.num_inputs,args.only_test)
     else:
+        # if args.num_inputs > 1:
+        #     print("Multiple inputs are not supported for EGNO. Using single input instead.")
+        #     return None, None, None
         from EGNO.simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
         from EGNO.model.egno import EGNO
         from EGNO.main_simulation_simple_no import run_epoch

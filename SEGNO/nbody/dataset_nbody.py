@@ -37,18 +37,25 @@ class NBodyDataset():
         # loc = np.load(osp.join(dir, 'dataset_gravity', 'loc_' + self.suffix + '.npy'))
         loc = np.load(self.data_dir / f'loc_{self.suffix}.npy')
         vel = np.load(self.data_dir / f'vel_{self.suffix}.npy')
+        if loc.shape[-2:] != (self.n_balls, 3):
+            # should transpose the last two dimensions
+            loc = np.transpose(loc, (0, 1, 3, 2))
+            vel = np.transpose(vel, (0, 1, 3, 2))
+            assert (loc.shape[-2:] == (self.n_balls, 3) and vel.shape[-2:] == (self.n_balls, 3)), "Shape mismatch!"
+       
         charges = np.load(self.data_dir / f'charges_{self.suffix}.npy')
         loc, vel = self.preprocess(loc, vel, charges)
         return (loc, vel), None
 
     def preprocess(self, loc, vel, charges=None):
-        loc, vel = torch.Tensor(loc).transpose(2, 3), torch.Tensor(vel).transpose(2, 3)
+        loc, vel = torch.tensor(loc), torch.tensor(vel)
+        n_nodes = loc.size(2)
+        
         if charges is not None:
-            charges = torch.Tensor(charges) # [N_sym, n_nodes, 1]
+            charges = torch.tensor(charges) # [N_sym, n_nodes, 1]
             # expand charges to match the time dimension
             charges = charges.unsqueeze(1).expand(-1, loc.size(1), -1, -1)
             loc = torch.cat((loc, charges), dim=-1)
-        n_nodes = loc.size(2)
         loc = loc[0:self.max_samples, :, :, :]  # limit number of samples
         vel = vel[0:self.max_samples, :, :, :]  # speed when starting the trajectory
 

@@ -26,82 +26,116 @@ def tot_energy_spring(loc, vel, edges, interaction_strength=.1):
 
 
 def tot_energy_charged(loc, vel, edges, interaction_strength=1):
-        """
-        loc: np.array of shape (3, N)
-        vel: np.array of shape (3, N)
-        edges: np.array of shape (N, N) with interaction strengths
-        """
-        # disables division by zero warning, since I fix it with fill_diagonal
-        with np.errstate(divide='ignore'):
+    """
+    loc: np.array of shape (3, N)
+    vel: np.array of shape (3, N)
+    edges: np.array of shape (N, N) with interaction strengths
+    """
+    # disables division by zero warning, since I fix it with fill_diagonal
+    with np.errstate(divide='ignore'):
 
-            # K = 0.5 * (vel ** 2).sum()
-            K = (0.5 * np.linalg.norm(vel, axis=1)**2).sum()
-            U = 0
-            for i in range(loc.shape[1]):
-                for j in range(loc.shape[1]):
-                    if i != j:
-                        r = loc[:, i] - loc[:, j]
-                        # dist = np.sqrt((r ** 2).sum())
-                        # if overflow occurs, return np.inf
-                        dist = np.linalg.norm(r)
-                        U += 0.5 * interaction_strength * edges[
-                            i, j] / dist
-            return U + K
+        # K = 0.5 * (vel ** 2).sum()
+        K = (0.5 * np.linalg.norm(vel, axis=1)**2).sum()
+        U = 0
+        for i in range(loc.shape[1]):
+            for j in range(loc.shape[1]):
+                if i != j:
+                    r = loc[:, i] - loc[:, j]
+                    # dist = np.sqrt((r ** 2).sum())
+                    # if overflow occurs, return np.inf
+                    dist = np.linalg.norm(r)
+                    U += 0.5 * interaction_strength * edges[
+                        i, j] / dist
+        return U + K
+
+
+def tot_energy_charged_batch(loc, vel, edges, interaction_strength=1):
+    """
+    loc, vel: np.array of shape (T, N, 3)
+    edges: np.array of shape (N, N) with interaction strengths
+    """
+    assert loc.shape[-1] == 3, "loc must have shape (T, N, 3)"
+    K = 0.5 * np.sum(np.sum(vel**2, axis=-1), axis=-1)  # (T,)
+
+    # calculate pairwise distances on the last dimension
+    dist = loc[:, :, np.newaxis, :] - loc[:, np.newaxis, :, :]  # (T, N, N, 3)
+    dist = np.linalg.norm(dist, axis=-1)  # (T, N, N)
+    dist = np.where(dist == 0, np.inf, dist)  # avoid division by zero
+    
+    U = 0.5 * interaction_strength * np.sum(np.expand_dims(edges, axis=0) / dist, axis=(-1, -2)).view()  # (T,)
+    return K + U.squeeze()
 
 
 def tot_energy_gravity(pos, vel, mass, G=1.0):
-        # Kinetic Energy:
-        KE = 0.5 * np.sum(np.sum(mass * vel**2))
+    assert pos.shape[1] == 3, "Position must have shape (N, 3)"
+    # Kinetic Energy:
+    # pos, vel: np.array of shape (N, 3)
+    # mass: np.array of shape (N, 1)
 
-        # Potential Energy:
+    KE = 0.5 * np.sum(np.sum(mass * vel**2))
 
-        # positions r = [x,y,z] for all particles
-        x = pos[:, 0:1]
-        y = pos[:, 1:2]
-        z = pos[:, 2:3]
+    # Potential Energy:
 
-        # matrix that stores all pairwise particle separations: r_j - r_i
-        dx = x.T - x
-        dy = y.T - y
-        dz = z.T - z
+    # positions r = [x,y,z] for all particles
+    x = pos[:, 0:1]
+    y = pos[:, 1:2]
+    z = pos[:, 2:3]
 
-        # matrix that stores 1/r for all particle pairwise particle separations
-        inv_r = np.sqrt(dx**2 + dy**2 + dz**2)
-        inv_r[inv_r > 0] = 1.0/inv_r[inv_r > 0]
+    # matrix that stores all pairwise particle separations: r_j - r_i
+    dx = x.T - x
+    dy = y.T - y
+    dz = z.T - z
 
-        # sum over upper triangle, to count each interaction only once
-        PE = G * np.sum(np.sum(np.triu(-(mass*mass.T)*inv_r, 1)))
+    # matrix that stores 1/r for all particle pairwise particle separations
+    inv_r = np.sqrt(dx**2 + dy**2 + dz**2)
+    inv_r[inv_r > 0] = 1.0/inv_r[inv_r > 0]
 
-        return KE, PE, KE+PE
+    # sum over upper triangle, to count each interaction only once
+    PE = G * np.sum(np.sum(np.triu(-(mass*mass.T)*inv_r, 1)))
+    return KE+PE
+
+def tot_energy_gravity_batch(loc, vel, mass, G=1.0):
+    # pos, vel: np.array of shape (T, N, 3) 
+    # mass: np.array of shape (T, N, 1)
+
+    assert loc.shape[-1] == 3, "Position must have shape (T, N, 3)"
+    KE = np.squeeze(0.5 * np.sum(np.sum(mass * vel**2, axis=-1), axis=-1))  # (T,)
+
+    # Potential Energy:
+    # positions r = [x,y,z] for all particles
+    x = loc[:, :, 0:1]  # (T, N, 1)
+    y = loc[:, :, 1:2]  # (T, N, 1)
+    z = loc[:, :, 2:3]  # (T, N, 1)
+
+    dx = x.transpose(0, 2, 1) - x  # (T, N, N)
+    dy = y.transpose(0, 2, 1) - y  # (T, N, N)
+    dz = z.transpose(0, 2, 1) - z  # (T, N, N)
+    inv_r = np.sqrt(dx**2 + dy**2 + dz**2) # (T, N, N)
+    inv_r[inv_r > 0] = 1.0 / inv_r[inv_r > 0]  # avoid division by zero
+
+    PE = G * np.sum(np.sum(np.triu(-(mass * mass.transpose(0, 2, 1)) * inv_r, 1), axis=-1), axis=-1)  # (T,)
+    return KE + PE
 
 def conserved_energy_fun(dataset, loc, vel, edges, batch=None):
-    if batch is not None:
-        edge_matr, _ = to_dense_batch(edges, batch)
-        edge_matr = edge_matr.cpu().detach().numpy().repeat(edge_matr.shape[1], axis=2)
-        edge_matr = np.einsum('tij,tji ->tij', edge_matr, edge_matr)
-        nploc, _ = to_dense_batch(loc, batch)
-        npvel, _ = to_dense_batch(vel, batch)
-        nploc = nploc.cpu().detach().numpy().transpose(0, 2, 1)  # (B, 3, N)
-        npvel = npvel.cpu().detach().numpy().transpose(0, 2, 1)  # (B, 3, N)
-    elif edges.size(-1) != edges.size(-2):
-        raise ValueError("Edge matrix must be square when batch is None.")
-    else:
-        edge_matr = edges.unsqueeze(0).cpu().detach().numpy()
-        nploc = loc.unsqueeze(0).cpu().detach().numpy().transpose(0, 2, 1)  # (1, 3, N)
-        npvel = vel.unsqueeze(0).cpu().detach().numpy().transpose(0, 2, 1)  # (1, 3, N)
+    edge_matr, _ = to_dense_batch(edges, batch)
+    edge_matr = edge_matr.cpu().numpy().repeat(edge_matr.shape[1], axis=2)
+    edge_matr = np.einsum('tij,tji ->tij', edge_matr, edge_matr)
 
-    if dataset == "charged":
-        energy_fun = tot_energy_charged
-    elif dataset == "gravity":
-        energy_fun = tot_energy_gravity
-    elif dataset == "spring":
-        energy_fun = tot_energy_spring
+    edge_single = to_dense_batch(edges, batch)[0].cpu().numpy()
+    nploc, _ = to_dense_batch(loc, batch)
+    npvel, _ = to_dense_batch(vel, batch)
+    nploc = nploc.cpu().numpy() # (B, N, 3)
+    npvel = npvel.cpu().numpy()
+
+    # for i in range(nploc.shape[0]):
+    if dataset == "gravity":
+        energies = tot_energy_gravity_batch(nploc, npvel, edge_single)
+    elif dataset == "charged":
+        energies = tot_energy_charged_batch(nploc, npvel, edge_matr)
+    # elif dataset == "spring":
+    #     energies = tot_energy_spring_batch(nploc.transpose(0, 2, 1), npvel.transpose(0, 2, 1), edge_matr)
     else:
-        raise ValueError(f"Unknown dataset: {dataset}. Supported datasets are 'charged', 'gravity', and 'spring'.")
-    
-    energies = np.zeros(nploc.shape[0])
-    for i in range(nploc.shape[0]):
-        energies[i] = energy_fun(nploc[i], npvel[i], edge_matr[i])
+        raise ValueError(f"Unknown dataset: {dataset}")
     return energies
 
 def compute_energy_drift(loc, vel, edges):
