@@ -75,6 +75,7 @@ def measure_performance(func):
                     'model': args[0].model,
                     'n_balls': args[0].n_balls,
                     'exp_name': args[0].exp_name})
+        write_to_csv(row, LOGFILE)
         return result
     return wrapper
 

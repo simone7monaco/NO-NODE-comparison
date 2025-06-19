@@ -48,7 +48,7 @@ class NBodyDataset():
         return (loc, vel), None
 
     def preprocess(self, loc, vel, charges=None):
-        loc, vel = torch.tensor(loc).float(), torch.tensor(vel).float()
+        loc, vel = torch.tensor(loc), torch.tensor(vel)
         n_nodes = loc.size(2)
         
         if charges is not None:
@@ -59,7 +59,7 @@ class NBodyDataset():
         loc = loc[0:self.max_samples, :, :, :]  # limit number of samples
         vel = vel[0:self.max_samples, :, :, :]  # speed when starting the trajectory
 
-        return loc, vel
+        return loc.float(), vel.float()
 
     def set_max_samples(self, max_samples):
         self.max_samples = int(max_samples)
