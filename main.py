@@ -64,9 +64,6 @@ def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)[args.model.upper()]
 
-    if args.num_inputs > 1 and args.varDT:
-        raise ValueError("Variable DT is not supported with multiple inputs.")
-
     print(args)
     args.data_dir = Path(args.data_dir)
     seed = args.seed

@@ -10,9 +10,9 @@ import time
 import psutil
 import pynvml
 import datetime
-import csv
 from copy import deepcopy
 import wandb
+import pandas as pd
 """
 Perform a GPU usage analysis for the training script based on the number of particles in the input
 """
@@ -21,16 +21,13 @@ Perform a GPU usage analysis for the training script based on the number of part
 LOGFILE = "performance_log.csv"
 
 
-def write_to_csv(row, logfile=LOGFILE):
+def write_to_csv(row:dict, logfile=LOGFILE):
     file_exists = os.path.isfile(logfile)
-    # Open the CSV file in append mode
-    with open(logfile, 'a', newline='') as csvfile:
-        # Use the keys of the row as header fields
-        writer = csv.DictWriter(csvfile, fieldnames=row.keys())
-        # If the file does not exist, write the header
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(row)
+    new_row = pd.DataFrame([row])
+    if not file_exists:
+        new_row.to_csv(logfile, index=False)
+    else:
+        new_row.to_csv(logfile, mode='a', header=False, index=False)
 
 def measure_performance(func):
     def wrapper(*args, **kwargs):
@@ -149,4 +146,4 @@ if __name__ == "__main__":
             args.exp_name = f'{model}_n_balls_{n_balls}'
 
             print(f'Running {model} with {n_balls} balls...')
-            main(args)  # Assuming main function handles the training and logging
+            check_performance(args)

@@ -71,9 +71,8 @@ class NBodyDataset():
                     rows.append(i)
                     cols.append(j)
         edges = [rows, cols]
-        edge_attr = torch.tensor(edge_attr).float().transpose(0, 1).unsqueeze(
-            2)  # swap n_nodes <--> batch_size and add nf dimension
-        # print(edges, edge_attr.shape, edge_attr)
+        edge_attr = torch.tensor(np.array(edge_attr)).float().transpose(0, 1).unsqueeze(2) 
+        # swap n_nodes <--> batch_size and add nf dimension
         return loc, vel, edge_attr, edges, torch.tensor(charges).float()
 
     def set_max_samples(self, max_samples):
