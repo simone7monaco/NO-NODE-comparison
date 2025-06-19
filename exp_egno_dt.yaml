@@ -14,10 +14,7 @@ parameters:
     - egno
     - segno
   n_balls:
-    values:
-    - 5
-    - 10
-    - 20
+    value: 5
   num_inputs:
     value: 1
   num_timesteps:

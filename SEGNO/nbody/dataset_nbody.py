@@ -48,7 +48,7 @@ class NBodyDataset():
         return (loc, vel), None
 
     def preprocess(self, loc, vel, charges=None):
-        loc, vel = torch.tensor(loc), torch.tensor(vel)
+        loc, vel = torch.tensor(loc).float(), torch.tensor(vel).float()
         n_nodes = loc.size(2)
         
         if charges is not None:
