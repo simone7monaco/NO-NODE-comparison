@@ -1,0 +1,29 @@
+method: grid
+metric:
+  goal: minimize
+  name: test_loss
+parameters:
+  dataset:
+    values:
+    - charged
+    - gravity
+  exp_name:
+    value: exp_3
+  model:
+    values:
+    - egno
+    - segno
+  n_balls:
+    values:
+    - 5
+    - 10
+    - 20
+  num_inputs:
+    value: 1
+  num_timesteps:
+    value: 10
+  seed:
+    values: [1, 2, 3]
+  use_wb:
+    value: true
+program: main.py
