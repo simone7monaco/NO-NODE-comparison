@@ -162,7 +162,7 @@ def main(config=None):
     torch.cuda.manual_seed(seed)
 
     varDt = True if args.varDT and args.num_inputs>1 else False
-
+    
     dataset_train = SimulationDataset(partition='train', max_samples=args.max_training_samples,
                                       data_dir=args.data_dir,n_balls=args.n_balls, num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=varDt) #, num_inputs=args.num_inputs
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True,
@@ -209,9 +209,7 @@ def main(config=None):
             
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                #best_test_loss = test_loss
                 best_train_loss = train_loss
-                #best_avg_num_steps = avg_num_steps
                 best_epoch = epoch
                 # Save model is move to early stopping.
             print("*** Best Val Loss: %.5f \t  Best epoch %d"
@@ -224,20 +222,20 @@ def main(config=None):
     model = EGNO(n_layers=args.n_layers, in_node_nf=1, in_edge_nf=2, hidden_nf=args.nf, device=device,
                      with_v=True, flat=args.flat, activation=nn.SiLU(), norm=args.norm, use_time_conv=True,
                      num_modes=args.num_modes, num_timesteps=args.num_timesteps, time_emb_dim=args.time_emb_dim, num_inputs=args.num_inputs, varDT=args.varDT)# Create a new instance of the model
-    model.load_state_dict(torch.load(model_save_path))
+    model.load_state_dict(torch.load(model_save_path, weights_only=False))
     
     test_loss, avg_num_steps, losses, trajectories = train(model, optimizer, epoch, loader_test, args, backprop=False, rollout=args.rollout)
     results['test loss'].append(test_loss)
     results['traj_loss'].append(losses)
     json_object = json.dumps(results, indent=4)
-    
+
     with open(args.outf + "/" + args.exp_name + "/loss"+"_seed="+str(seed)+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_num_timesteps="+str(args.num_timesteps)+"_n_layers="+str(args.n_layers)+"_lr="+str(args.lr)+"_wd="+str(args.weight_decay)+"_.json", "w") as outfile:
         outfile.write(json_object)
-    
+
     #save trajectories in pickle
     with open(args.outf + "/" + args.exp_name + "/trajectories"+"_seed="+str(seed)+"_n_part="+str(args.n_balls)+"_n_inputs="+str(args.num_inputs)+"_varDT="+str(varDt)+"_num_timesteps="+str(args.num_timesteps)+"_n_layers="+str(args.n_layers)+"_lr="+str(args.lr)+"_wd="+str(args.weight_decay)+"_.pkl", "wb") as f:
         pickle.dump(trajectories, f)
-        
+
     return best_train_loss, best_val_loss, best_test_loss, best_epoch
 
 
@@ -252,7 +250,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
     #print(f"this is the {loader.dataset.partition} partition")
     if rollout:
         first = True ## 0: target, 1: prediction
-
+    
     for batch_idx, data in enumerate(loader):
         data = [d.to(device) for d in data]
         loc, vel, edge_attr, charges, loc_true = data #loc_true.shape:[B, 5, T, 3]
@@ -345,7 +343,7 @@ def train(model, optimizer, epoch, loader, args, backprop=True, rollout=False):
                 num_elements = int(0.4 * args.traj_len*args.num_timesteps)  # Calculate 40% of the total elements
                 if args.traj_len*args.num_timesteps >= 50:
                     num_elements = 20
-
+                
                 sup =  num_elements #first_invalid_idx if first_invalid_idx > 15 else
                 
                 locs_pred = locs_pred[:sup]
@@ -554,9 +552,7 @@ def pearson_correlation_batch(x, y, N):
     #return the average (in the batch) number of steps before reaching a value of correlation lower than 0.5
     #return the minimum first index along T dimension after which correlation drops below the threshold                                 
     return correlation, torch.mean(torch.Tensor(num_steps_batch)), first_failure_index 
-
-
-    
+ 
 
 if __name__ == "__main__":
     best_train_loss, best_val_loss, best_test_loss, best_epoch = main()

@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 from pathlib import Path
+from utils import conserved_energy_fun
+from torch_geometric.utils import to_dense_batch
 
 
 class NBodyDataset():
@@ -23,25 +25,37 @@ class NBodyDataset():
             self.suffix += f"_{dataset}{n_balls}_initvel1small"
         else:
             raise Exception("Wrong dataset name %s" % self.dataset_name)
-
+        
+        self.n_balls = n_balls
         self.max_samples = int(max_samples)
         self.dataset_name = dataset_name
+        self.dataset = dataset
         self.data, self.edges = self.load()
+        
+    def energy_fun(self, loc, vel, edges, batch=None):
+        return conserved_energy_fun(self.dataset, loc, vel, edges, batch=batch)
 
     def load(self):
-        dir = self.data_dir
-        loc = np.load(self.data_dir / f'loc_{self.suffix}.npy')
+        loc = np.load(self.data_dir / f'loc_{self.suffix}.npy') # shape (n_samples, n_timesteps, n_balls, 3)
         vel = np.load(self.data_dir / f'vel_{self.suffix}.npy')
-        edges = np.load(self.data_dir / f'edges_{self.suffix}.npy')
+        if loc.shape[-2:] != (self.n_balls, 3):
+            # should transpose the last two dimensions
+            loc = np.transpose(loc, (0, 1, 3, 2))
+            vel = np.transpose(vel, (0, 1, 3, 2))
+            assert (loc.shape[-2:] == (self.n_balls, 3) and vel.shape[-2:] == (self.n_balls, 3)), "Shape mismatch!"
+
+        # edges = np.load(self.data_dir / f'edges_{self.suffix}.npy')
         charges = np.load(self.data_dir / f'charges_{self.suffix}.npy')
+        mat_charges = charges.repeat(charges.shape[1], axis=2)
+        edges = np.einsum('tij,tji ->tij', mat_charges, mat_charges)
         print(f"Loaded dataset {self.suffix} with {loc.shape[0]} samples, {loc.shape[2]} nodes, {loc.shape[3]} features")
-        print(loc.shape, vel.shape, edges.shape, charges.shape)
+        
         loc, vel, edge_attr, edges, charges = self.preprocess(loc, vel, edges, charges)
         return (loc, vel, edge_attr, charges), edges
 
     def preprocess(self, loc, vel, edges, charges):
         # cast to torch and swap n_nodes <--> n_features dimensions
-        loc, vel = torch.Tensor(loc).transpose(2, 3), torch.Tensor(vel).transpose(2, 3)
+        loc, vel = torch.tensor(loc).float(), torch.tensor(vel).float()
         n_nodes = loc.size(2)
         loc = loc[0:self.max_samples, :, :, :]  # limit number of samples
         vel = vel[0:self.max_samples, :, :, :]  # speed when starting the trajectory
@@ -57,10 +71,9 @@ class NBodyDataset():
                     rows.append(i)
                     cols.append(j)
         edges = [rows, cols]
-        edge_attr = torch.Tensor(edge_attr).transpose(0, 1).unsqueeze(
-            2)  # swap n_nodes <--> batch_size and add nf dimension
-        print(edges, edge_attr.shape, edge_attr)
-        return torch.Tensor(loc), torch.Tensor(vel), torch.Tensor(edge_attr), edges, torch.Tensor(charges)
+        edge_attr = torch.tensor(np.array(edge_attr)).float().transpose(0, 1).unsqueeze(2) 
+        # swap n_nodes <--> batch_size and add nf dimension
+        return loc, vel, edge_attr, edges, torch.tensor(charges).float()
 
     def set_max_samples(self, max_samples):
         self.max_samples = int(max_samples)
@@ -190,7 +203,7 @@ class NBodyDynamicsDataset(NBodyDataset):
             idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
             loc_inputs = loc[frame_0 + idxs]
             vel_inputs = vel[frame_0 + idxs]
-            
+            # TODO: cosa fanno edge_attr?
             return loc_inputs, vel_inputs, edge_attr, charges, locs
 
         

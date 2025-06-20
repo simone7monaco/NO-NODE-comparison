@@ -133,7 +133,7 @@ class MotionDataset():
                         cols.append(j)
                         edge_attr.append([2])
                     else:
-                        pass  # TODO: Do we need to add the rest of edges here?
+                        pass
 
         edges = [rows, cols]  # edges for equivariant message passing
         edge_attr = torch.Tensor(np.array(edge_attr))  # [edge, 3]
@@ -298,7 +298,7 @@ class MotionDynamicsDataset(MotionDataset):
                         cols.append(j)
                         edge_attr.append([2])
                     else:
-                        pass  # TODO: Do we need to add the rest of edges here?
+                        pass
 
         edges = [rows, cols]  # edges for equivariant message passing
         edge_attr = torch.Tensor(np.array(edge_attr))  # [edge, 3]

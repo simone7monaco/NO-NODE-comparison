@@ -150,7 +150,7 @@ def train(gpu, args):
     
     model = SEGNO(in_node_nf=1, in_edge_nf=1, hidden_nf=64, device=device, n_layers=args.layers,
                          recurrent=True, norm_diff=False, tanh=False, use_previous_state=args.num_inputs, variableDT=args.varDT)
-    model.load_state_dict(torch.load(model_save_path))
+    model.load_state_dict(torch.load(model_save_path, weights_only=False))
 
     test_loss, res, trajectories = run_epoch(model, optimizer, [loss_mse,loss_mse_no_red], epoch, loader_test,
                                 device, args, backprop=False,rollout=True)

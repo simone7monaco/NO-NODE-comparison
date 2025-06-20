@@ -49,8 +49,17 @@ def reshape_sample(sample):
     return sample
 
 def tot_energy_charged(loc, vel, edges, interaction_strength=.1):
+        """
+        Parameters:
+        - loc: np.array of shape (T, 3, N)
+        - vel: np.array of shape (T, 3, N)
+        - edges: np.array of shape (N, N) with interaction strengths
+        """
         with np.errstate(divide='ignore'):
             K = 0.5 * (vel ** 2).sum()
+
+            diff = loc[:, :, :, None] - loc[:, :, None, :]  # shape (T, 3, N, N)
+            dist_sq = np.sum(diff ** 2, axis=1)             # shape (T, N, N)
             U = 0
             for i in range(loc.shape[1]):
                 for j in range(loc.shape[1]):
@@ -86,7 +95,7 @@ def tot_energy_gravity(pos, vel, mass, G=1.0):
 
         return KE, PE, KE+PE
 
-def compute_energy_drift(loc, vel, edges):
+def compute_energy_drift(loc, vel, edges, kind='charged'):
     """
     Compute relative energy drift at each timestep from a trajectory.
     
@@ -101,11 +110,13 @@ def compute_energy_drift(loc, vel, edges):
     T = loc.shape[0]
     energy_drift = np.zeros(T)
 
+    energy_fun = tot_energy_charged if kind == 'charged' else tot_energy_gravity
+
     # Initial energy
-    E0 = tot_energy_charged(loc[0], vel[0], edges)
+    E0 = energy_fun(loc[0], vel[0], edges)
 
     for t in range(T):
-        Et = tot_energy_charged(loc[t], vel[t], edges)
+        Et = energy_fun(loc[t], vel[t], edges)
         energy_drift[t] = np.abs((Et - E0) / (E0 + 1e-10))  # epsilon for stability
 
     return energy_drift

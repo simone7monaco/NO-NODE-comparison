@@ -368,7 +368,7 @@ class GravitySim(object):
         force_save = np.zeros((T_save, N, self.dim))
 
         # Specific sim parameters
-        mass = np.ones((N, 1))
+        mass = np.ones((N, 1)) * np.random.randn(N, 1) * 0.1
         t = 0
         pos = np.random.randn(N, self.dim)   # randomly selected positions and velocities
         vel = np.random.randn(N, self.dim)

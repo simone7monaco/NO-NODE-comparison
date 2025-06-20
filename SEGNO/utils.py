@@ -38,7 +38,7 @@ def load_model(model, dir, id, gpu=""):
     """ Load a state dict into a model """
     if gpu != "":
         gpu = "_" + str(gpu)
-    state_dict = torch.load(os.path.join(dir, id + gpu + ".pt"))
+    state_dict = torch.load(os.path.join(dir, id + gpu + ".pt"), weights_only=False)
     model.load_state_dict(state_dict)
     return model
 
