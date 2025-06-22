@@ -13,5 +13,17 @@ t_wandb/
 myenv1/
 plots/
 data_copy/
+EGNO_exp/
+EGNO_exp_1/
+EGNO_exp_/
+SEGNO_exp/
+SEGNO_exp_1/
 EGNO/simulation/data
+charged_plots/
+gravity_plots/
+artifacts/
+wandb_export.csv
+wandb_export_complete.csv
+artifact_model_map.json
+artifact_model_map_nested.json
 .vscode

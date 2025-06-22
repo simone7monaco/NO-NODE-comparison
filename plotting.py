@@ -436,7 +436,7 @@ def load_trajectory_config(config, model):
     #_, trajectoriesS = load_pickle_files_suffix(directoryS, config)
     _, trajectoriesE = load_pickle_files_suffix(directoryE, config)
     print("here print trajs shape")
-    print(np.array(trajectoriesE).shape)   # (10,2,2000,20,15) = (# runs,true/pred, num_samples, T, D) D= #nodes *3 (3dimensions)
+    print(np.array(trajectoriesE).shape)   # (10,2,2000,20,15) = (# seeds,true/pred, num_samples, T, D) D= #nodes *3 (3dimensions)
 
     return trajectoriesE
 
@@ -530,6 +530,25 @@ def load_trajectory_for_config(config, model, metric="MSE"):
     
     return mean_losses_E, std_losses_E, mean_corr_E, std_corr_E#mean_losses_S, std_losses_S, mean_losses_E, std_losses_E, mean_corr_S, std_corr_S, mean_corr_E, std_corr_E
 
+def load_trajectory_wandb(config, metric="MSE"):
+    
+    trajectoriesE = config["data"]
+    #print(len(trajectoriesE))
+    #MSE
+    #mean_losses_S, std_losses_S = compute_mse_mean_std_per_timestep(trajectoriesS)
+    if metric=="MAE":
+        mean_mse, std_mse, mean_mae, std_mae = compute_mse_mean_std_per_timestep(trajectoriesE, metric)
+    else:
+        mean_losses_E, std_losses_E = compute_mse_mean_std_per_timestep(trajectoriesE, metric)
+
+    #Correlation
+    #mean_corr_S, std_corr_S = compute_correlation_per_timestep(trajectoriesS)
+    mean_corr_E, std_corr_E = compute_correlation_per_timestep(trajectoriesE)
+    if metric=="MAE":
+        return mean_mse, std_mse, mean_corr_E, std_corr_E, mean_mae, std_mae
+    
+    return mean_losses_E, std_losses_E, mean_corr_E, std_corr_E
+
 def compute_correlation_per_timestep(tensor_list):
     corr_list = []  
 
@@ -537,7 +556,7 @@ def compute_correlation_per_timestep(tensor_list):
     for tensor in tensor_list:
         target = tensor[0]  # Shape: (#samples, T, D)
         prediction = tensor[1]  # Shape: (#samples, T, D)
-
+        print(target.shape, prediction.shape)
         # Compute correlation for each timestep
         corr_per_timestep = compute_correlation(target, prediction)  # Shape: (T,)
         corr_list.append(corr_per_timestep)
@@ -894,6 +913,70 @@ def compute_avg_loss_until_t(model="EGNO",t=0.99,n_part=5,num_inputs=1,varDT=Fal
     index = index*num_timesteps if model=="SEGNO" else index
     return index, avg_loss
 
+def compute_avg_loss_until_t_wandb(config, same_t=True, metric="MAE", std=True):
+    
+    (t_last, first) = (-1, config["num_timesteps"]) if config["model"] == "EGNO" else (2 if config["num_timesteps"]==10 else 4, 0)
+
+    num_timesteps = config["num_timesteps"]
+    if metric=="MAE":
+        #TODO check shape of stds and add energy calculation
+        mean_mse, std_mse, mean_corr, std_corr, mean_mae, std_mae = load_trajectory_wandb(config, metric=metric)
+        ed_mean, ed_std = compute_energy_mean_std_per_timestep(config["energy"])
+        if same_t:
+            avg_mse = torch.mean(mean_mse[:t_last]) ## ::num_timesteps
+            avg_mae = torch.mean(mean_mae[:t_last])
+            avg_std_mse = torch.mean(std_mse[:t_last])
+            avg_std_mae = torch.mean(std_mae[:t_last])
+            avg_ed = torch.mean(ed_mean[:t_last])
+            avg_std_ed = torch.mean(ed_std[:t_last])
+            index = num_timesteps*2 if num_timesteps==10 else num_timesteps*4
+            first_mse = mean_mse[first]
+            first_mae = mean_mae[first]
+            if std:
+                return index, avg_mse, avg_std_mse, avg_mae, avg_std_mae, first_mse, first_mae, avg_ed, avg_std_ed
+
+            return index, avg_mse, avg_mae, first_mse, first_mae
+
+    else:
+        mean_losses, std_losses, mean_corr, std_corr = load_trajectory_wandb(config)
+
+    if same_t:
+        avg_loss = torch.mean(mean_losses[:t_last]) ## ::num_timesteps
+        index = num_timesteps*2 if num_timesteps==10 else num_timesteps*4
+        return index, avg_loss
+
+    indeces = torch.where(mean_corr < t)[0]
+    if len(indeces) > 0:
+        index = indeces[0].item()
+    else:
+        index = -1
+    #print(index)
+    avg_loss = torch.mean(mean_losses[:index])
+    if index == -1:
+        index = mean_losses.shape[0]
+    
+    index = index*num_timesteps if model=="SEGNO" else index
+    return index, avg_loss
+
+def compute_energy_mean_std_per_timestep(tensor_list):
+    
+    #T = tensor_list[0].shape[2]  # Extract T (number of timesteps)
+    energy_drift_list = []  
+    # Iterate over each tensor in the list and compute MSE loss for each timestep
+    print(np.array(tensor_list).shape) #(10,2,2000,20,15) = (# runs ,true/pred, num_samples, T, D) D= #nodes *3 (3dimensions)
+    for tensor in tensor_list:
+        print(tensor.shape)
+
+        # Compute MSE loss for each timestep: average over samples and dimensions
+        ed_per_timestep = torch.mean((tensor) ** 2, dim=(0, 2))  # Shape: (T,)
+        energy_drift_list.append(ed_per_timestep)
+    # Stack all MSE loss vectors from the list to compute mean and std
+    ed_losses = torch.stack(energy_drift_list, dim=0)  # Shape: (10, T)
+    # Compute mean and standard deviation across the 10 elements (dim=0)
+    mean_ed = torch.mean(ed_losses, dim=0)  # Shape: (T,)
+    std_ed = torch.std(ed_losses, dim=0)    # Shape: (T,)
+
+    return mean_ed, std_ed
 
 def plot_multiple_curves(configurations, plot_func, metric="MSE", save=False, filename=""):
     """
@@ -966,6 +1049,69 @@ def plot_multiple_curves(configurations, plot_func, metric="MSE", save=False, fi
         plt.close()
     return
 
+def plot_multiple_curves_wandb(configurations, plot_func, metric="MSE", save=False, filename=""):
+    
+    plt.figure(figsize=(10, 6))  # Create a single figure
+
+    for config in configurations:
+        # Call the inner function to get the data for plotting
+        x, y, std, label = plot_func(config, metric)
+        #plt.plot(x, y, label=label)
+        
+        if config["model"]=="SEGNO":
+            t=np.arange(y.shape[0])
+            t= (t*config["num_timesteps"]) + config["num_timesteps"]
+            
+            for x_val in t[::config["num_timesteps"]]:
+                plt.axvline(x=x_val, color='red', linestyle='--')
+        else:
+            t=np.arange(y.shape[0])
+            #(t*config["num_timesteps"]) + config["num_timesteps"]
+            for x_val in t[config["num_timesteps"]::config["num_timesteps"]]:
+                #print(x_val)
+                plt.axvline(x=x_val, color='red', linestyle='--')
+    
+        
+        # Calculate the upper and lower bounds
+        upper_bound = y + std
+        lower_bound = y - std
+        
+        # Plot the main values
+        if config["baseline"]:
+            plt.plot(x, y, marker='o', label=config["model"]+" baseline", color=config["color"], linewidth=2,alpha=0.3)
+        else:                   #fix this after
+            plt.plot(x, y, marker='o', label=config["label"], color=config["color"], linewidth=2) 
+
+        # Fill the region between lower and upper bounds
+        plt.fill_between(x, lower_bound, upper_bound, color=config["color"], alpha=0.2, label='± Std Dev')
+
+        # if config["model"]=="EGNO":
+        #     for i, (x_val, y_val) in enumerate(zip(x[::3], y[::3])):
+        #         plt.text(x_val, y_val, f'{y_val:.4f}', fontsize=10, ha='right')
+        # else:
+        #     for i, (x_val, y_val) in enumerate(zip(x, y)):
+        #         plt.text(x_val, y_val, f'{y_val:.4f}', fontsize=10, ha='right')
+        
+
+    # Finalize the plot
+    if metric=="MSE":
+        plt.yscale('log')
+    plt.xticks(x) 
+    
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.xlabel("Timestamps")
+    plt.ylabel(metric)
+    plt.legend()
+    # Show the plot
+    plt.tight_layout()
+    if save:
+        plt.savefig(filename + '.png')
+        plt.close()
+    else:
+        plt.show()
+        plt.close()
+    return
+
 # Example inner function that generates data based on a configuration
 def plot_function(config,metric):
     """
@@ -1008,7 +1154,30 @@ def plot_function(config,metric):
     
     return x, y, config["model"] + str(config["n_layers"])
 
-
+def plot_function_wandb(config, metric):
+    
+    mean_losses, std_losses, mean_corr, std_corr = load_trajectory_wandb(config, metric=metric)
+    l = 2 if config["num_timesteps"]==10 else 4
+    if config["model"]=="EGNO":
+        x = np.arange(mean_losses.shape[0]) +1
+    elif config["model"]=="SEGNO":
+        x = ((np.arange(mean_losses.shape[0])*config["num_timesteps"]) +config["num_timesteps"])[:l]
+   
+    if metric=="MSE":
+        y = mean_losses
+        if config["model"]=="SEGNO":
+            y = y[:l]
+            std_losses = std_losses[:l]
+        return x, y, std_losses, config["model"] 
+    
+    elif metric=="Correlation":
+        y = mean_corr
+        if config["model"]=="SEGNO":
+            y = y[:l]
+            std_corr = std_corr[:l]
+        return x, y, std_corr, config["model"] 
+    
+    return x, y, config["model"] #+ str(config["n_layers"])
 
 #def load_model():
 
