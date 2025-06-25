@@ -1,7 +1,7 @@
 import numpy as np
 import torch
-import random
 from pathlib import Path
+from utils import conserved_energy_fun
 
 
 class NBodyDataset():
@@ -22,6 +22,9 @@ class NBodyDataset():
 
         self.max_samples = int(max_samples)
         self.data, self.edges = self.load()
+
+    def energy_fun(self, loc, vel, edges, batch=None):
+        return conserved_energy_fun(self.dataset, loc, vel, edges, batch=batch)
 
     def load(self):
         loc = np.load(self.root / f'loc_{self.suffix}.npy')

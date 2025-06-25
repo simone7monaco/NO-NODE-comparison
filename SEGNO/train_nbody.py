@@ -63,7 +63,8 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
     else:
         model.eval()
 
-    res = {'epoch': epoch, 'loss': 0, 'counter': 0}
+    res = {'epoch': epoch, 'loss': 0, 'losses': [], "tot_num_steps": 0,"avg_num_steps": 0, 'counter': 0, 'long_loss': {}}
+
     if isinstance(criterion, tuple):
         criterion, loss_mse_no_red = criterion[0], criterion[1]
     n_nodes = loader.dataset.n_balls
@@ -178,9 +179,14 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
         prefix = "==> "
     else:
         prefix = ""
-    print('%s epoch %d avg loss: %.5f' % (prefix+loader.dataset.partition, epoch, res['loss'] / res['counter']))
-
-    return res['loss'] / res['counter']#, res
+    avg_loss = res['loss'] / res['counter']
+    print('%s epoch %d avg loss: %.5f' % (prefix+loader.dataset.partition, epoch, avg_loss))
+    if rollout:
+        return avg_loss, {'targets': traj_targ, 
+                          'preds': traj_pred, 
+                          'energies': traj_energies,
+                          'pred_indices': pred_indices,} | res
+    return avg_loss#, res
 
 
 
@@ -193,7 +199,7 @@ def rollout_fn(model, h, loc, edge_index, vel, edge_attr, batch,
     prod_charges = charges[rows] * charges[cols] if charges is not None else None
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[-1])).to(loc) # (T, BN, 3)
     energies = []
-    if isinstance(T, list):
+    if isinstance(num_steps, list):
         assert len(num_steps) == traj_len, "num_steps should be a list of length traj_len"
     for i in range(traj_len):
         T = num_steps[i] if isinstance(num_steps, list) else num_steps
