@@ -6,6 +6,10 @@ SEGNO_BASE:
   parameters:
     exp_name:
       value: _exp_new
+    dataset:
+      values:
+      - charged
+      - gravity
     model:
       value: segno
     n_balls:
@@ -15,15 +19,11 @@ SEGNO_BASE:
       - 20
     num_inputs:
       value: 1
-    num_timesteps:
-      value: 2
     seed:
       values:
       - 1
       - 2
       - 3
-      - 4
-      - 5
     use_wb:
       value: true
   program: main.py
@@ -38,6 +38,10 @@ EGNO_BASE:
   parameters:
     exp_name:
       value: _exp_new
+    dataset:
+      values:
+      - charged
+      - gravity
     model:
       value: egno
     n_balls:

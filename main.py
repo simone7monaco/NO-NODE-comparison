@@ -33,7 +33,7 @@ def get_args():
     parser.add_argument('--epochs', type=int, default=700, # 1000,
                         help='number of epochs to train (default: 1000)')
     parser.add_argument('--data_dir', type=Path, default='data')
-    parser.add_argument('--dataset', type=str, default='charged', choices=['charged'],#, 'gravity'],
+    parser.add_argument('--dataset', type=str, default='charged', choices=['charged', 'gravity'],
                         help='Dataset to use (default: charged)')
     parser.add_argument('--max_samples', type=int, default=3000)
     parser.add_argument('--seed', type=int, default=42,
