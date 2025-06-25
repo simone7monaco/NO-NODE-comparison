@@ -120,9 +120,9 @@ class NBodyDynamicsDataset(NBodyDataset):
         self.var_dt = varDT
         self.dT = dT
         frames_0_dict = {'nbody': 6, 'nbody_small': 30, 'nbody_small_out_dist': 20}
-        self.start = frames_0_dict.get('dataset_name') if dataset == 'charged' else 0 # 0 for gravity dataset
+        self.start = frames_0_dict.get(dataset_name) if dataset == 'charged' else 0 # 0 for gravity dataset
         if self.start is None:
-            raise Exception("Wrong dataset partition %s" % self.dataset_name)
+            raise Exception("Wrong dataset partition %s" % dataset_name)
         super(NBodyDynamicsDataset, self).__init__(data_dir, partition, max_samples, dataset, dataset_name, n_balls=n_balls)
 
     def __getitem__(self, i):

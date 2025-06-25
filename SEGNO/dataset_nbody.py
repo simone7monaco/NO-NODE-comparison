@@ -38,11 +38,13 @@ class NBodyDataset():
 
     def preprocess(self, loc, vel, edges, charges):
         # cast to torch and swap n_nodes <--> n_features dimensions
-        loc, vel = torch.Tensor(loc).transpose(2, 3), torch.Tensor(vel).transpose(2, 3)
+        if loc.shape[2:] == (3, self.n_balls):
+            loc, vel = torch.Tensor(loc).transpose(2, 3), torch.Tensor(vel).transpose(2, 3)
+        assert loc.shape[2:] == (self.n_balls, 3), "Location tensor shape mismatch"
         n_nodes = loc.size(2)
         loc = loc[0:self.max_samples, :, :, :]  # limit number of samples
         vel = vel[0:self.max_samples, :, :, :]  # speed when starting the trajectory
-        charges = charges[0:self.max_samples]
+        charges = torch.Tensor(charges[0:self.max_samples]) # B, n_nodes, 1
         edge_attr = []
 
         # Initialize edges and edge_attributes
@@ -54,10 +56,10 @@ class NBodyDataset():
                     rows.append(i)
                     cols.append(j)
         edges = [rows, cols]
-        edge_attr = torch.Tensor(edge_attr).transpose(0, 1).unsqueeze(
+        edge_attr = torch.Tensor(np.array(edge_attr)).transpose(0, 1).unsqueeze(
             2)  # swap n_nodes <--> batch_size and add nf dimension
 
-        return torch.Tensor(loc), torch.Tensor(vel), torch.Tensor(edge_attr), edges, torch.Tensor(charges)
+        return loc, vel, edge_attr, edges, charges
 
     def set_max_samples(self, max_samples):
         self.max_samples = int(max_samples)

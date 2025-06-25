@@ -103,11 +103,11 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
             loc = locs[start + np.cumsum([0] + steps[:-1])].transpose(0, 1).contiguous() # BN, T, 3
             vel = vels[start + np.cumsum([0] + steps[:-1])].transpose(0, 1).contiguous()
             loc_end = locs[start + np.sum(steps)]
-            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).T.unsqueeze(-1) # (T, BN, 1)
+            h = torch.sqrt(torch.sum(vel ** 2, dim=-1)).unsqueeze(-1) # (BN, T, 1)
             loc_dist = torch.sum((loc[rows, -1, :] - loc[cols, -1, :])**2, 1).unsqueeze(1)  # relative distances among LAST locations
         else:
             loc, loc_end, vel = locs[start], locs[start+num_timesteps], vels[start]
-            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(1).detach()
+            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(-1).detach()
             loc_dist = torch.sum((loc[rows] - loc[cols])**2, 1).unsqueeze(1)  # relative distances among locations
         edge_attr = torch.cat([prod_charges, loc_dist], 1).detach()  # concatenate all edge properties
 

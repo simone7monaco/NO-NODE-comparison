@@ -72,6 +72,10 @@ SEGNO_PRO:
       value: _exp_new
     model:
       value: segno
+    dataset:
+      values:
+      - charged
+      - gravity
     n_balls:
       values:
       - 5
@@ -79,8 +83,6 @@ SEGNO_PRO:
       - 20
     num_inputs:
       values: [2, 3]
-    num_timesteps:
-      value: 2
     seed:
       values:
       - 1
@@ -105,6 +107,10 @@ EGNO_PRO:
       value: _exp_new
     model:
       value: egno
+    dataset:
+      values:
+      - charged
+      - gravity
     n_balls:
       values:
       - 5

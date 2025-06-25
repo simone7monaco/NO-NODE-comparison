@@ -154,8 +154,8 @@ def main(args):
             if early_stopping.early_stop:
                 print("Early Stopping.")
                 break
-    if not model_save_path.exists():
-        model_save_path = model_save_path.with_name(f'{model_save_path.stem.replace("_dT_1", "")}.pth')
+    # if not model_save_path.exists():
+    #     model_save_path = model_save_path.with_name(f'{model_save_path.stem.replace("_dT_1", "")}.pth')
     model.load_state_dict(torch.load(model_save_path, weights_only=False))
     with torch.no_grad():
         test_resuts = run_epoch(model, optimizer, criterion, epoch, loader_test, args=args, backprop=False, num_timesteps=args.num_timesteps, rollout=args.traj_len > 1)
