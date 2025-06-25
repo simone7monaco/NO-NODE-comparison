@@ -45,6 +45,8 @@ class EGNO(EGNN):
             #add also random timesteps in the range [0,9] instead of equispaced for variable dt
             
             if not self.varDT:
+                timesteps = rand_timesteps#random_ascending_tensor(length=self.num_inputs).to(x[0])#torch.arange(T).to(x[0])
+            else:
                 timesteps = torch.linspace(0, T - 1, self.num_inputs, dtype=int).to(x[0])#torch.arange(T).to(x[0])
             t_list = [x.unsqueeze(0) for x in timesteps]#.reshape(1,)
             #print(t_list)
