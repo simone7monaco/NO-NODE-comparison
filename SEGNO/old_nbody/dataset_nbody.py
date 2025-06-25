@@ -9,7 +9,8 @@ class NBodyDataset():
     NBodyDataset
     """
 
-    def __init__(self, data_dir, partition='train', max_samples=1e8, dataset="charged",dataset_name="nbody_small", n_balls=5):
+    def __init__(self, data_dir, partition='train', max_samples=1e8, dataset="charged",
+                 dataset_name="nbody_small", n_balls=5, normalize=False):
         self.partition = partition
         self.data_dir = data_dir
         if self.partition == 'val':
@@ -17,6 +18,7 @@ class NBodyDataset():
         else:
             self.suffix = self.partition
         self.dataset_name = dataset_name
+        self.start = 30 if dataset == "charged" else 0 # gravity dataset starts at 0
         if dataset_name == "nbody":
             self.suffix += f"_{dataset}5_initvel1"
         elif dataset_name == "nbody_small" or dataset_name == "nbody_small_out_dist":
@@ -29,6 +31,20 @@ class NBodyDataset():
         self.dataset_name = dataset_name
         self.dataset = dataset
         self.data, self.edges = self.load()
+        if normalize != False: # it can be either True or a dictionary with keys 'loc_mean', 'loc_std', 'vel_mean', 'vel_std'
+            # data is a tuple of (loc, vel), each of shape (S, T, N, 3) get the mean and std
+            # for each coordinate and normalize
+            loc, vel = self.data
+            if not isinstance(normalize, dict):
+                normalize = {}
+            
+            self.loc_mean = normalize.get('loc_mean', loc.mean(dim=(0, 1, 2), keepdim=True))
+            self.loc_std = normalize.get('loc_std', loc.std(dim=(0, 1, 2), keepdim=True))
+            self.vel_mean = normalize.get('vel_mean', vel.mean(dim=(0, 1, 2), keepdim=True))
+            self.vel_std = normalize.get('vel_std', vel.std(dim=(0, 1, 2), keepdim=True))
+            loc = (loc - self.loc_mean) / self.loc_std
+            vel = (vel - self.vel_mean) / self.vel_std
+            self.data = (loc, vel)
 
     def energy_fun(self, loc, vel, edges, batch=None):
         return conserved_energy_fun(self.dataset, loc, vel, edges, batch=batch)
@@ -72,14 +88,6 @@ class NBodyDataset():
         loc, vel = self.data
         loc, vel = loc[i], vel[i]
 
-        if self.dataset_name == "nbody":
-            frame_0, frame_T = 6, 8
-        elif self.dataset_name == "nbody_small":
-            frame_0, frame_T = 30, 40
-        elif self.dataset_name == "nbody_small_out_dist":
-            frame_0, frame_T = 20, 30
-        else:
-            raise Exception("Wrong dataset partition %s" % self.dataset_name)
         #print(loc.shape)
         #loc = torch.transpose(loc, 1, 2)
         #vel = torch.transpose(vel, 1, 2)

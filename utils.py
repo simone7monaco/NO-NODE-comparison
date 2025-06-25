@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch_geometric.utils import to_dense_batch
 
 def reshape_sample(sample):
@@ -10,6 +11,61 @@ def reshape_sample(sample):
     sample = sample.reshape(T, N, 3)        # (T, N, 3)
     sample = sample.transpose(0, 2, 1)      # (T, 3, N)
     return sample
+
+def cumulative_random_tensor_indices(size, start, end):
+    # Generate the cumulative numpy array as before
+    random_array = torch.randint(start, end, size=(size,))
+    
+    cumulative_tensor = torch.cumsum(random_array,dim=0)
+    
+    return cumulative_tensor,  random_array
+
+
+def cumulative_random_tensor_indices_capped(N, start, end, MAX=100):
+    """
+    Generates a random integer tensor and adjusts it so that its cumulative sum equals MAX.
+    
+    Args:
+    - N (int): Length of the tensor.
+    - start (int): Minimum value for random integers (inclusive).
+    - end (int): Maximum value for random integers (exclusive).
+    - MAX (int): Desired cumulative sum target (default is 100).
+    
+    Returns:
+    - torch.Tensor: The adjusted random tensor.
+    - torch.Tensor: The cumulative sum of the adjusted random tensor.
+    """
+    # Step 1: Generate a random integer tensor of size N within [start, end)
+    random_array = torch.randint(start, end, (N,))
+    
+    # Step 2: Calculate the initial sum and scale values to approach MAX
+    initial_sum = random_array.sum().item()
+    
+    # If initial sum is zero, reinitialize random_array to avoid division by zero
+    while initial_sum == 0:
+        random_array = torch.randint(start, end, (N,))
+        initial_sum = random_array.sum().item()
+
+    # Scale values to approximate the sum to MAX
+    scaled_array = torch.round((random_array.float() / initial_sum) * MAX).int()
+
+    # Step 3: Correct any rounding difference to ensure sum equals MAX
+    diff = MAX - scaled_array.sum().item()
+    
+    if diff != 0:
+        # Randomly adjust elements to make the sum exactly MAX
+        indices = torch.randperm(N)
+        for i in indices:
+            # Ensure values stay within the [start, end) range after adjustment
+            if start <= scaled_array[i] + diff < end:
+                scaled_array[i] += diff
+                break  # Exit once sum is corrected
+    
+    # Step 4: Calculate cumulative sum tensor
+    cumulative_tensor = torch.cumsum(scaled_array, dim=0)
+    return cumulative_tensor, scaled_array
+
+
 
 def tot_energy_spring(loc, vel, edges, interaction_strength=.1):
         with np.errstate(divide='ignore'):
@@ -179,3 +235,67 @@ def compute_energy_drift_batch(loc, vel, edges):
     all_energy_drifts = np.stack(all_energy_drifts)
 
     return all_energy_drifts
+
+
+
+def pearson_correlation_batch(x, y, N):
+    """
+    Compute the Pearson correlation for each time step (T) in each batch (B).
+    
+    Args:
+    - x: Tensor of shape (T, B*N, 3), predicted states.
+    - y: Tensor of shape (T, B*N, 3), ground truth states.
+    
+    Returns:
+    - correlations: Tensor of shape (B, T), Pearson correlation for each time step in each batch.
+    """
+    
+    # Reshape to (B, T, N*3) 
+    
+    T = x.shape[0] 
+    cut = int(0.4 * T)  # Calculate 40% of the total elements to avoid NaN values
+    B = x.size(1) // N
+    x = x.reshape( T, B, -1)[:cut].transpose(0,1)  # Flatten N and 3 into a single dimension
+    y = y.reshape( T, B, -1)[:cut].transpose(0,1)
+    
+    
+    # Mean subtraction
+    mean_x = x.mean(dim=2, keepdim=True)
+    mean_y = y.mean(dim=2, keepdim=True)
+    
+    xm = x - mean_x
+    ym = y - mean_y
+
+    # Compute covariance between x and y along the flattened dimensions
+    covariance = (xm * ym).sum(dim=2)
+
+    # Compute standard deviations along the flattened dimensions
+    std_x = torch.sqrt((xm ** 2).sum(dim=2))
+    std_y = torch.sqrt((ym ** 2).sum(dim=2))
+
+    # Compute Pearson correlation for each sample in the batch
+    correlation = covariance / (std_x * std_y)
+
+    #number of steps before reaching a value of correlation, between prediction and ground truth for each timesteps, lower than 0.5
+    num_steps_batch = []
+
+    for i in range(correlation.shape[0]):
+        
+        if any(correlation[i] < 0.5):
+            num_steps_before = (correlation[i] < 0.5).nonzero(as_tuple=True)[0][0].item()
+            
+        else:
+            num_steps_before = cut
+        num_steps_batch.append(num_steps_before)
+
+    # Check if all values along B dimension are >= 0.5 for each T
+    mask = torch.all(correlation >= 0.5, dim=0)
+
+    # Convert the boolean mask to int for argmax
+    first_failure_index = torch.argmax(~mask.int()).item()
+    # If no failures, return the number of columns as the "end"
+    if mask.all():
+        first_failure_index = correlation.size(1)       
+    
+    #return the minimum first index along T dimension after which correlation drops below the threshold                                 
+    return correlation, torch.mean(torch.Tensor(num_steps_batch)), first_failure_index 

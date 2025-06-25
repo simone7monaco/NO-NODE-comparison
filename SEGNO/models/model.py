@@ -48,7 +48,7 @@ class SEGNO(nn.Module):
         for _ in range(self.n_layers):
             h, x, v, _ = self.module(h, edges, x, v, v, edge_attr=edge_attr)
             
-        return x, h
+        return x, h, v
     
     def prepare_node_inputs(self, loc_seq, vel_seq, his_seq):
         """

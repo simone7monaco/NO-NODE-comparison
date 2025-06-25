@@ -5,7 +5,7 @@ import torch
 import torch.utils.data
 from .simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
 from .model.egno import EGNO
-from .utils import EarlyStopping, cumulative_random_tensor_indices_capped, random_ascending_tensor
+from .utils import EarlyStopping, random_ascending_tensor
 from torch_geometric.utils import to_dense_batch
 import os
 from torch import nn, optim
@@ -14,6 +14,7 @@ import json
 import random
 import numpy as np
 import wandb
+from utils import pearson_correlation_batch, cumulative_random_tensor_indices_capped
 
 
 def get_args():
@@ -449,74 +450,6 @@ def rollout_fn(model, nodes, loc, edges, v, edge_attr_o, edge_attr,
     else:
         loc_preds = loc_preds.reshape(tot_num_step, -1, 3)
         return loc_preds, steps, energies, energies_allsteps
-    
-    
-
-def pearson_correlation_batch(x, y, N):
-    """
-    Compute the Pearson correlation for each time step (T) in each batch (B).
-    
-    Args:
-    - x: Tensor of shape (T, B*N, 3), predicted states.
-    - y: Tensor of shape (T, B*N, 3), ground truth states.
-    
-    Returns:
-    - correlations: Tensor of shape (B, T), Pearson correlation for each time step in each batch.
-    """
-    
-    # Reshape to (B, T, N*3) 
-    
-    T = x.shape[0] 
-    cut = int(0.4 * T)  # Calculate 40% of the total elements to avoid NaN values
-    B = x.size(1) // N
-    x = x.reshape( T, B, -1)[:cut].transpose(0,1)  # Flatten N and 3 into a single dimension
-    y = y.reshape( T, B, -1)[:cut].transpose(0,1)
-    
-    
-    # Mean subtraction
-    mean_x = x.mean(dim=2, keepdim=True)
-    mean_y = y.mean(dim=2, keepdim=True)
-    
-    xm = x - mean_x
-    ym = y - mean_y
-
-    # Compute covariance between x and y along the flattened dimensions
-    covariance = (xm * ym).sum(dim=2)
-
-    # Compute standard deviations along the flattened dimensions
-    std_x = torch.sqrt((xm ** 2).sum(dim=2))
-    std_y = torch.sqrt((ym ** 2).sum(dim=2))
-
-    # Compute Pearson correlation for each sample in the batch
-    correlation = covariance / (std_x * std_y)
-
-    #number of steps before reaching a value of correlation, between prediction and ground truth for each timesteps, lower than 0.5
-    num_steps_batch = []
-
-    for i in range(correlation.shape[0]):
-        
-        if any(correlation[i] < 0.5):
-            num_steps_before = (correlation[i] < 0.5).nonzero(as_tuple=True)[0][0].item()
-            
-        else:
-            num_steps_before = cut
-        num_steps_batch.append(num_steps_before)
-
-    # Check if all values along B dimension are >= 0.5 for each T
-    mask = torch.all(correlation >= 0.5, dim=0)
-
-    # Convert the boolean mask to int for argmax
-    first_failure_index = torch.argmax(~mask.int()).item()
-    #print(first_failure_index,torch.mean(torch.Tensor(num_steps_batch)),correlation[0])
-    # If no failures, return the number of columns as the "end"
-    if mask.all():
-        first_failure_index = correlation.size(1)       
-    #print("first invalid")
-    #print(first_failure_index,torch.mean(torch.Tensor(num_steps_batch)))
-    #exit()
-    #return the average (in the batch) number of steps before reaching a value of correlation lower than 0.5
-    #return the minimum first index along T dimension after which correlation drops below the threshold                                 
-    return correlation, torch.mean(torch.Tensor(num_steps_batch)), first_failure_index 
  
 
 if __name__ == "__main__":

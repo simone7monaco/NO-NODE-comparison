@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import os
 from torch import nn, optim
-from ..models.model import SEGNO
+from .models.model import SEGNO
 from torch_geometric.nn import knn_graph
 from .dataset_nbody import NBodyDataset #from nbody.dataset_nbody import NBodyDataset
 import json
@@ -145,7 +145,7 @@ def train(gpu, args):
     return best_val_loss, best_test_loss, best_epoch
 
 
-def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, rollout=False):
+def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, rollout=False, num_timesteps=10, **kwargs):
     device = args.device
     varDt = args.varDT
     if backprop:
@@ -176,13 +176,13 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 
 
         locs, vels = data   #locs shape: [519, 500, 3] (T,BN,3)
-        start = 30
+        start = loader.dataset.start # 30 for charged small
         if locs.shape[2] > 3:
             h_nodes = locs[0, :, 3:] # node features (charges, masses, etc.)
             locs = locs[:, :, :3]
         else:
             h_nodes = None
-        loc, loc_end, vel = locs[start], locs[start+args.num_timesteps], vels[start]
+        loc, loc_end, vel = locs[start], locs[start+num_timesteps], vels[start]
 
         #print(loc.shape)
         batch_size = loc.shape[0] // loader.dataset.n_balls
@@ -198,17 +198,16 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
         edge_attr = loc_dist.detach()
         
         if rollout: 
-            start = 30
             num_prev = args.num_inputs
 
             if varDt: 
                 #pass steps to rollout to call the model at each iter with the corerct T
-                _, steps = cumulative_random_tensor_indices_capped(N=args.traj_len + num_prev - 1,start=1,end=args.num_timesteps+3, MAX=args.num_timesteps*(args.traj_len + 1))
+                _, steps = cumulative_random_tensor_indices_capped(N=args.traj_len + num_prev - 1,start=1,end=num_timesteps+3, MAX=num_timesteps*(args.traj_len + 1))
                 steps = steps.tolist()
                 T = steps[args.num_inputs-1:]    
             else:
-                steps = [args.num_timesteps for _ in range(num_prev + args.traj_len - 1)]
-                T = args.num_timesteps
+                steps = [num_timesteps for _ in range(num_prev + args.traj_len - 1)]
+                T = num_timesteps
             
             all_indices = start + np.cumsum([0] + steps)
             pred_indices = all_indices[num_prev:]
@@ -225,7 +224,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
             
             locs_pred, energies = rollout_fn(model, h, loc_list, edge_index, vel_list, edge_attr, batch, args.traj_len,
                                    num_steps=T, num_prev=num_prev, h_nodes=h_nodes,
-                                   energy_fun=loader.dataset.energy_fun)
+                                   energy_fun=loader.dataset.energy_fun, gt=locs_true)
             locs_pred = locs_pred.to(device)
             #locs_pred shape: [T, BN, 3], energy shape: [T, B, 1]
             corr, avg_num_steps = pearson_correlation_batch(locs_pred, locs_true, n_nodes)
@@ -250,17 +249,17 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
             loss = torch.mean(losses)
             res['losses'].append(losses.cpu().tolist())
         else:
-            T = args.num_timesteps
+            T = num_timesteps
             if args.num_inputs > 1 and not args.only_test:
                 steps = None
                 if varDt:
                     #pass steps to rollout to call the model at each iter with the corerct T
-                    indices, steps = cumulative_random_tensor_indices_capped(N=args.traj_len,start=1,end=args.num_timesteps+3, MAX=args.num_timesteps*args.traj_len)#cumulative_random_tensor_indices(args.num_inputs,1,10)
+                    indices, steps = cumulative_random_tensor_indices_capped(N=args.traj_len,start=1,end=num_timesteps+3, MAX=num_timesteps*args.traj_len)#cumulative_random_tensor_indices(args.num_inputs,1,10)
                     steps = steps.tolist()[:args.num_inputs]
                     indices = indices[:args.num_inputs]
 
                 start = 30
-                half_step = args.num_timesteps
+                half_step = num_timesteps
                 steps = steps if steps is not None else [half_step for _ in range(args.num_inputs)]
 
                 loc = locs[start + np.cumsum([0] + steps[:-1])].transpose(0, 1).contiguous() # BN, T, 3
@@ -295,7 +294,11 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
     avg_loss = res['loss'] / res['counter']
     if rollout:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
-        return avg_loss, {'targets': traj_targ, 'preds': traj_pred, 'energies': traj_energies, 'test_loss': avg_loss, 'traj_losses': res['losses']}
+        return avg_loss, {'targets': traj_targ, 
+                          'preds': traj_pred, 
+                          'energies': traj_energies, 
+                          'traj_losses': res['losses'],
+                          'pred_indices': pred_indices,}
     else:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)
         return avg_loss
@@ -304,7 +307,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
 @torch.no_grad()
 def rollout_fn(model, h, loc, edge_index, vel, edge_attr, batch, 
                traj_len,num_steps=10, num_prev=1, h_nodes=None,
-               energy_fun=None):
+               energy_fun=None, gt=None):
 
     loc_preds = torch.zeros((traj_len,loc.shape[0],loc.shape[-1])) # (T, BN, 3)
     energies = []

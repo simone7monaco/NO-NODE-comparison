@@ -22,15 +22,17 @@ EGNO:
 
 SEGNO:
   model_params:
-    in_node_nf: 2 # kinetic energy and {mass, charge}
-    in_edge_nf: 1
+    in_node_nf: 1
+    in_edge_nf: 2 # distance and {mass, charge}
     hidden_nf: 64
-    n_layers: 2
-    use_previous_state: false
+    n_layers: 8
+    recurrent: True
+    norm_diff: False
+    tanh: False
 
   training_params:
     lr: 5e-3
-    weight_decay: 1e-8
+    weight_decay: 1e-12
 
   other_params:
     nbody_name: nbody_small
