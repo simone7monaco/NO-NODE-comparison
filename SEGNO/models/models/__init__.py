@@ -1,1 +1,1 @@
-from .gcl import GCL, GCL_rf
+from .gcl import SEGNO_GCL

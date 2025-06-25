@@ -55,6 +55,8 @@ def tot_energy_charged_batch(loc, vel, edges, interaction_strength=1):
     edges: np.array of shape (N, N) with interaction strengths
     """
     assert loc.shape[-1] == 3, "loc must have shape (T, N, 3)"
+    assert edges.shape[-1] == edges.shape[-2] and edges.shape[-1] == loc.shape[1], \
+        "edges must have shape (T, N, N)"
     K = 0.5 * np.sum(np.sum(vel**2, axis=-1), axis=-1)  # (T,)
 
     # calculate pairwise distances on the last dimension
@@ -62,7 +64,9 @@ def tot_energy_charged_batch(loc, vel, edges, interaction_strength=1):
     dist = np.linalg.norm(dist, axis=-1)  # (T, N, N)
     dist = np.where(dist == 0, np.inf, dist)  # avoid division by zero
     
-    U = 0.5 * interaction_strength * np.sum(np.expand_dims(edges, axis=0) / dist, axis=(-1, -2)).view()  # (T,)
+    if edges.ndim == 2:
+        edges = np.expand_dims(edges, axis=0)
+    U = 0.5 * interaction_strength * np.sum(edges / dist, axis=(-1, -2)).view()  # (T,)
     return K + U.squeeze()
 
 

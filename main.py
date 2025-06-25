@@ -27,32 +27,31 @@ def get_args():
     parser = argparse.ArgumentParser(description='Main module for SEGNO and EGNO')
     parser.add_argument('--model', type=str, choices=['segno', 'egno'], required=True, 
                         help='Model to use: segno or egno')
-    parser.add_argument('--exp_name', type=str, default='exp_2', help='Experiment name')
+    parser.add_argument('--exp_name', type=str, default='0exp_new', help='Experiment name')
     parser.add_argument('--config', type=str, default='model_confs.yaml')
-    parser.add_argument('--batch_size', type=int, default=128, help='Batch size.')
+    parser.add_argument('--batch_size', type=int, default=256, help='Batch size.')
     parser.add_argument('--epochs', type=int, default=700, # 1000,
                         help='number of epochs to train (default: 1000)')
     parser.add_argument('--data_dir', type=Path, default='data')
-    parser.add_argument('--dataset', type=str, default='charged', choices=['charged', 'gravity'],
+    parser.add_argument('--dataset', type=str, default='charged', choices=['charged'],#, 'gravity'],
                         help='Dataset to use (default: charged)')
     parser.add_argument('--max_samples', type=int, default=3000)
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed (default: 42)')
     parser.add_argument('--only_test', type=str2bool, default=False)
-    parser.add_argument('--traj_len', type=int, default=10,
+    parser.add_argument('--traj_len', type=int, default=20,
                         help='Trajectory lenght in case of testing on rollout')
     parser.add_argument('--test_interval', type=int, default=5,
                         help='Test every test_interval epochs')
     parser.add_argument('--n_balls', type=int, default=5,
                         help='Number of balls in the nbody dataset')
     parser.add_argument('--outf', type=Path, default='results', help='Output folder')
-    parser.add_argument('--rollout', type=str2bool, default=True)
-    
     # Experiment parameters
-    parser.add_argument('--varDT', type=str2bool, default=False, choices=[True, False],)
-    
+    parser.add_argument('--dT', type=int, default=1, help='Time step size (default: 1). It applies to EGNO only as it accepts a fixed number of snaphots.')
     parser.add_argument('--num_timesteps', type=int, default=10, #choices=[2, 5, 10],
-                    help='Distance in time between one snaphot an the other.')
+                    help='Distance in dT between one snaphot an the other.')
+    
+    parser.add_argument('--varDT', type=str2bool, default=False, choices=[True, False], help='Use variable time steps for the model (replaces dT).')
     parser.add_argument('--num_inputs', type=int, default=1, #choices=[1, 2, 3, 4],
                         help='The number of inputs to give for each prediction step.')
     parser.add_argument('--use_wb', type=str2bool, default=False,
@@ -76,7 +75,7 @@ def main(args):
     args.device = device
 
     # Common objects
-    model_save_path = args.outf / args.exp_name / args.model / f'{args.dataset}_seed={seed}_n_part={args.n_balls}_n_inputs={args.num_inputs}_varDT={args.varDT}_num_timesteps={args.num_timesteps}.pth'
+    model_save_path = args.outf / args.exp_name / f'{args.model.upper()}_{args.dataset}_seed={seed}_n_part={args.n_balls}_n_inputs={args.num_inputs}_dT_{args.dT}_varDT={args.varDT}_num_timesteps={args.num_timesteps}.pth'
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
     print(f'Model saved to {model_save_path}')
     early_stopping = EarlyStopping(patience=15, verbose=True, path=model_save_path)
@@ -88,34 +87,24 @@ def main(args):
     best_epoch = 0
 
     if args.model == 'segno':
-        from SEGNO.nbody.models.model import SEGNO
-        from SEGNO.nbody.dataset_nbody import NBodyDataset #from nbody.dataset_nbody import NBodyDataset
-        from SEGNO.nbody.train_nbody import run_epoch
+        from SEGNO.models.model import SEGNO
+        from SEGNO.dataset_nbody import NBodyDataset
+        from SEGNO.train_nbody import run_epoch
 
-        nbody_name = config['other_params']['nbody_name']
-
-        dataset_train = NBodyDataset(args.data_dir, partition='train', dataset_name=nbody_name, dataset=args.dataset,
+        dataset_train = NBodyDataset(args.data_dir, partition='train', dataset=args.dataset,
                                     max_samples=args.max_samples, n_balls=args.n_balls)
-        loader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
-        dataset_val = NBodyDataset(args.data_dir, partition='val', dataset_name=nbody_name, dataset=args.dataset, n_balls=args.n_balls)
-        loader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False)
+        dataset_val = NBodyDataset(args.data_dir, partition='val', dataset=args.dataset, n_balls=args.n_balls)
 
-        dataset_test = NBodyDataset(args.data_dir, partition='test', dataset_name=nbody_name, dataset=args.dataset, n_balls=args.n_balls)
-        loader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False)
+        dataset_test = NBodyDataset(args.data_dir, partition='test', dataset=args.dataset, n_balls=args.n_balls)
 
-        params = config['model_params'] | dict(varDT=args.varDT, device=device)
-        params['n_inputs'] = args.num_inputs
-        # if args.num_inputs > 1:
-        #     # All dynamical node_features for each input + the static one
-        #     params['in_node_nf'] = (params['in_node_nf'] - 1) * args.num_inputs + 1
+        params = config['model_params'] | dict(varDT=args.varDT, 
+                                               multiple_agg='attn' if args.num_inputs > 1 else None,
+                                               device=device)
+        
         model = SEGNO(**params)
-        criterion = [loss_mse,loss_mse_no_red]
-        print(args.varDT,args.num_inputs,args.only_test)
+        criterion = (loss_mse,loss_mse_no_red)
     else:
-        # if args.num_inputs > 1:
-        #     print("Multiple inputs are not supported for EGNO. Using single input instead.")
-        #     return None, None, None
         from EGNO.simulation.dataset_simple import NBodyDynamicsDataset as SimulationDataset
         from EGNO.model.egno import EGNO
         from EGNO.main_simulation_simple_no import run_epoch
@@ -123,33 +112,35 @@ def main(args):
         args.varDT = True if args.varDT and args.num_inputs>1 else False
 
         dataset_train = SimulationDataset(data_dir=args.data_dir, partition='train', max_samples=args.max_samples, dataset=args.dataset, n_balls=args.n_balls, 
-                                          num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT) #, num_inputs=args.num_inputs
-        loader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=0)
+                                          num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT, dT=args.dT)
 
         dataset_val = SimulationDataset(data_dir=args.data_dir, partition='val', n_balls=args.n_balls, dataset=args.dataset,
-                                        num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT)#num_inputs=args.num_inputs
-        loader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=False,
-                                                num_workers=0)
+                                        num_timesteps=args.num_timesteps,num_inputs=args.num_inputs, varDT=args.varDT, dT=args.dT)
 
         dataset_test = SimulationDataset(data_dir=args.data_dir, partition='test', n_balls=args.n_balls, dataset=args.dataset,
-                                         num_timesteps=args.num_timesteps, num_inputs=args.num_inputs, rollout=True, 
-                                         traj_len=args.traj_len, varDT= args.varDT)
-        loader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=False,
-                                                num_workers=0)
+                                         num_timesteps=args.num_timesteps, num_inputs=args.num_inputs, 
+                                         traj_len=args.traj_len, varDT= args.varDT, dT=args.dT)
         
         params = config['model_params'] | dict(num_timesteps=args.num_timesteps, num_inputs=args.num_inputs, varDT=args.varDT, device=device)
         model = EGNO(**params)
         criterion = loss_mse_no_red
-        print(args.rollout,args.num_inputs,args.varDT, args.n_balls)
+    
+    # print(args.num_inputs,args.varDT, args.n_balls)
+    print(f"Num particles: {args.n_balls}, VarDT: {args.varDT}, Num inputs: {args.num_inputs}, Num timesteps: {args.num_timesteps}, dT: {args.dT}")
+
+    loader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True)
+    loader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=True)
+    loader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, drop_last=True)
 
     optimizer = optim.Adam(model.parameters(), lr=float(config['training_params']['lr']), weight_decay=float(config['training_params']['weight_decay']))
 
     wandb.init(project="Particle-Physics", entity="jet-tagging", config=args, name=model_save_path.stem, mode="online" if args.use_wb else "disabled")
+    epoch = 0 # enable test-only mode
     for epoch in range(args.epochs):
-        train_loss = run_epoch(model, optimizer, criterion, epoch, loader_train, args)
-        results['train loss'].append(train_loss)
-        if (epoch +1) % args.test_interval == 0 or epoch == args.epochs-1:
-            val_loss = run_epoch(model, optimizer, criterion, epoch, loader_val, args, backprop=False)
+        train_loss = run_epoch(model, optimizer, criterion, epoch, loader_train, args=args, num_timesteps=args.num_timesteps)
+        if (epoch % args.test_interval == 0 or epoch == args.epochs-1) and epoch > 0:
+            with torch.no_grad():
+                val_loss = run_epoch(model, optimizer, criterion, epoch, loader_val, args=args, backprop=False, num_timesteps=args.num_timesteps)
             
             results['eval epoch'].append(epoch)
             results['val loss'].append(val_loss)
@@ -163,27 +154,35 @@ def main(args):
             if early_stopping.early_stop:
                 print("Early Stopping.")
                 break
-        
+    if not model_save_path.exists():
+        model_save_path = model_save_path.with_name(f'{model_save_path.stem.replace("_dT_1", "")}.pth')
     model.load_state_dict(torch.load(model_save_path, weights_only=False))
-    test_loss, trajectories = run_epoch(model, optimizer, criterion, epoch, loader_test, args, backprop=False, rollout=args.rollout)
+    with torch.no_grad():
+        test_resuts = run_epoch(model, optimizer, criterion, epoch, loader_test, args=args, backprop=False, num_timesteps=args.num_timesteps, rollout=args.traj_len > 1)
+        if isinstance(test_resuts, tuple):
+            test_loss, trajectories = test_resuts
+        else:
+            test_loss = test_resuts
+            
     results['test loss'].append(test_loss)
         
     json_object = json.dumps(results, indent=4)
     with open(model_save_path.with_suffix('.json'), "w") as outfile:
         outfile.write(json_object)
 
-    traj_file = model_save_path.parent / f'{model_save_path.stem}_results.pt'
-    traj_data = Data.from_dict(trajectories)
-    torch.save(traj_data, traj_file)
+    if args.traj_len > 0:
+        traj_file = model_save_path.parent / f'{model_save_path.stem}_results.pt'
+        traj_data = Data.from_dict(trajectories)
+        torch.save(traj_data, traj_file)
     
-    if args.use_wb:
-        clean_name = model_save_path.stem.replace("=", "-")
+        if args.use_wb:
+            clean_name = model_save_path.stem.replace("=", "-")
 
-        artifact = wandb.Artifact(name=clean_name, type='results', description="Trajectory data artifact")
-        artifact.add_file(local_path=traj_file, name=clean_name)
-        artifact.save()
-        wandb.log({"train loss": train_loss, "val loss": val_loss, "test loss": test_loss})
-        wandb.finish()
+            artifact = wandb.Artifact(name=clean_name, type='results', description="Trajectory data artifact")
+            artifact.add_file(local_path=traj_file, name=clean_name)
+            artifact.save()
+            wandb.log({"train loss": train_loss, "val loss": val_loss, "test loss": test_loss})
+            wandb.finish()
     return best_val_loss, test_loss, best_epoch
 
 

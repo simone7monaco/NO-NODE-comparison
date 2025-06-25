@@ -7,7 +7,8 @@ import torch
 
 class EGNO(EGNN):
     def __init__(self, n_layers, in_node_nf, in_edge_nf, hidden_nf, activation=nn.SiLU(), device='cpu', with_v=False,
-                 flat=False, norm=False, use_time_conv=True, num_modes=2, num_timesteps=8, time_emb_dim=32, num_inputs=1,varDT=False):
+                 flat=False, norm=False, use_time_conv=True, num_modes=2, num_timesteps=8, time_emb_dim=32, 
+                 num_inputs=1,varDT=False, fix_out_size=False):
         self.time_emb_dim = time_emb_dim
         if num_inputs > 1:
             in_node_nf = in_node_nf + self.time_emb_dim * 2 #use time embedding for different inputs
@@ -18,7 +19,8 @@ class EGNO(EGNN):
         self.varDT = varDT
         super(EGNO, self).__init__(n_layers, in_node_nf, in_edge_nf, hidden_nf, activation, device, with_v, flat, norm)
         self.use_time_conv = use_time_conv
-        self.num_timesteps = num_timesteps
+        self.num_timesteps = num_timesteps if not fix_out_size else 10
+        
         self.device = device
         self.hidden_nf = hidden_nf
         num_modes = min(num_timesteps,num_modes) if num_timesteps != 5 else min(num_modes,3)
@@ -32,31 +34,31 @@ class EGNO(EGNN):
 
         self.to(self.device)
 
-    def forward(self, x, h, edge_index, edge_fea, v=None, loc_mean=None, rand_timesteps=None):  # [BN, H]
-
-        T = self.num_timesteps #if timesteps is None else len(timesteps)
+    def forward(self, x, h, edge_index, edge_fea, v=None, loc_mean=None, timesteps_out=None):  # [BN, H]
+        # TODO: variable dT may not work with multiple inputs (as input dTs)
+        T = self.num_timesteps
+        timesteps_out = torch.arange(T).to(x) if timesteps_out is None else timesteps_out
         
         if self.num_inputs > 1 and len(x.shape) > 2:
             
             num_nodes = h[0].shape[0]
             #add also random timesteps in the range [0,9] instead of equispaced for variable dt
-            if self.varDT :
-                timesteps = rand_timesteps#random_ascending_tensor(length=self.num_inputs).to(x[0])#torch.arange(T).to(x[0])
-            else:
+            
+            if not self.varDT:
                 timesteps = torch.linspace(0, T - 1, self.num_inputs, dtype=int).to(x[0])#torch.arange(T).to(x[0])
             t_list = [x.unsqueeze(0) for x in timesteps]#.reshape(1,)
             #print(t_list)
             timesteps = repeat_elements_to_exact_shape(t_list, T).to(x[0])
             time_emb_in = get_timestep_embedding(timesteps, embedding_dim=self.time_emb_dim, max_positions=10000)  # [T, H_t]
-            time_emb = get_timestep_embedding(torch.arange(T).to(x), embedding_dim=self.time_emb_dim, max_positions=10000)  # [T, H_t]
+            time_emb = get_timestep_embedding(timesteps_out, embedding_dim=self.time_emb_dim, max_positions=10000)  # [T, H_t]
         elif self.num_inputs > 1:
             num_nodes = h.shape[0]
             #for rollout after the first step all the others have just one input step, hence equal inpu time embedding
             time_emb_in = get_timestep_embedding(torch.ones(T).to(x), embedding_dim=self.time_emb_dim, max_positions=10000)
-            time_emb = get_timestep_embedding(torch.arange(T).to(x), embedding_dim=self.time_emb_dim, max_positions=10000)  # [T, H_t]
+            time_emb = get_timestep_embedding(timesteps_out, embedding_dim=self.time_emb_dim, max_positions=10000)  # [T, H_t]
         else:
             num_nodes = h.shape[0]
-            time_emb = get_timestep_embedding(torch.arange(T).to(x), embedding_dim=self.time_emb_dim, max_positions=10000)  # [T, H_t]
+            time_emb = get_timestep_embedding(timesteps_out, embedding_dim=self.time_emb_dim, max_positions=10000)  # [T, H_t]
         
         num_edges = edge_index[0].shape[0]
         cumsum = torch.arange(0, T).to(self.device) * num_nodes

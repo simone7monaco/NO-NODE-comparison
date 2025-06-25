@@ -143,7 +143,7 @@ class SpringSim(object):
             # Add noise to observations
             loc += np.random.randn(T_save, self.dim, self.n_balls) * self.noise_var
             vel += np.random.randn(T_save, self.dim, self.n_balls) * self.noise_var
-            return loc, vel, edges
+            return loc, vel, edges, None
 
 
 class ChargedParticlesSim(object):

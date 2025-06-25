@@ -1,8 +1,6 @@
 import numpy as np
 import torch
-from pathlib import Path
 from utils import conserved_energy_fun
-from torch_geometric.utils import to_dense_batch
 
 
 class NBodyDataset():
@@ -114,100 +112,74 @@ class NBodyDataset():
 
 
 class NBodyDynamicsDataset(NBodyDataset):
-    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset="charged",dataset_name="nbody_small", n_balls=5, num_timesteps=10, num_inputs=1, rollout=False, traj_len=1,varDT=False):
+    def __init__(self, partition='train', data_dir='.', max_samples=1e8, dataset="charged",dataset_name="nbody_small", n_balls=5, num_timesteps=10, 
+                 num_inputs=1, traj_len=1, dT = 1, varDT=False):
         self.num_timesteps = num_timesteps
-        self.rollout = rollout
         self.traj_len = traj_len
         self.num_inputs = num_inputs
         self.var_dt = varDT
+        self.dT = dT
+        frames_0_dict = {'nbody': 6, 'nbody_small': 30, 'nbody_small_out_dist': 20}
+        self.start = frames_0_dict.get('dataset_name') if dataset == 'charged' else 0 # 0 for gravity dataset
+        if self.start is None:
+            raise Exception("Wrong dataset partition %s" % self.dataset_name)
         super(NBodyDynamicsDataset, self).__init__(data_dir, partition, max_samples, dataset, dataset_name, n_balls=n_balls)
 
     def __getitem__(self, i):
+        assert self.num_inputs <= self.num_timesteps
         loc, vel, edge_attr, charges = self.data
         loc, vel, edge_attr, charges = loc[i], vel[i], edge_attr[i], charges[i]
 
-        if self.dataset_name == "nbody":
-            frame_0, frame_T = 6, 8
-        elif self.dataset_name == "nbody_small":
-            frame_0, frame_T = 30, 40
-        elif self.dataset_name == "nbody_small_out_dist":
-            frame_0, frame_T = 20, 30
-        else:
-            raise Exception("Wrong dataset partition %s" % self.dataset_name)
+        frame_0 = self.start
+        frame_T = frame_0 + self.num_timesteps * self.dT
         
-        frame_T = frame_0 + self.num_timesteps
-        
-        if self.rollout:
+        if self.traj_len > 1:
                 
             # if self.var_dt:
             #     #return all locs so that after its possible to select different delta T across the trajectory
             #     return loc[frame_0], vel[frame_0], edge_attr, charges, loc 
             
+            out_indices = []
             delta_frame = frame_T - frame_0
             for i in range(self.traj_len):
                 last = False
-                #location
                 if last:
-                    locs = [loc[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+                    oidx = torch.tensor([frame_0 + delta_frame + ii - self.num_timesteps for ii in range(1, self.num_timesteps + 1)])
                 else:
-                    locs = [loc[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
+                    oidx = torch.tensor([frame_0 + delta_frame * ii // self.num_timesteps for ii in range(1, self.num_timesteps + 1)])
                 
-                locs = np.stack(locs, axis=1) 
+                out_indices.append(oidx)
+                
+                locs = loc[oidx].transpose(1, 0)
+                vels = vel[oidx].transpose(1, 0)
                 
                 if i == 0: # first iter
                     locs_m = locs
-                else:
-                    locs_m = np.concatenate((locs_m,locs),axis=1)
-                #velocity
-                if last:
-                    vels = [vel[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-                else:
-                    vels = [vel[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-                vels = np.stack(vels, axis=1)
-                if i == 0: # first iter
                     vels_m = vels
                 else:
+                    locs_m = np.concatenate((locs_m,locs),axis=1)
                     vels_m = np.concatenate((vels_m,vels),axis=1)
 
                 frame_0 += self.num_timesteps
                 
-            frame_0 = 30
+            frame_0 = self.start
             locs = locs_m
-            
-
+            out_indices = torch.stack(out_indices)
         else:
-            delta_frame = frame_T - frame_0
-            last = False
-            if last:
-                locs = [loc[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-            else:
-                locs = [loc[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-            locs = np.stack(locs, axis=1)
-            if last:
-                vels = [vel[frame_0 + delta_frame + ii - self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-            else:
-                vels = [vel[frame_0 + delta_frame * ii // self.num_timesteps] for ii in range(1, self.num_timesteps + 1)]
-            vels = np.stack(vels, axis=1)
+            out_indices = torch.arange(frame_0+1, frame_T+1, self.dT)
+            locs = loc[out_indices].transpose(1, 0) 
+            vels = vel[out_indices].transpose(1, 0)  
+            # shape (n_balls, T, 3)
 
-        if self.var_dt and self.num_inputs>1:
-                
-            assert self.num_inputs <= self.num_timesteps
-            # idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
-            # loc_inputs = loc[frame_0 + idxs]
-            # vel_inputs = vel[frame_0 + idxs]
-            
-            return loc, vel, edge_attr, charges, locs
-        
-        elif self.num_inputs > 1:
-            assert self.num_inputs <= self.num_timesteps
+        if self.var_dt and self.num_inputs>1: 
+            return loc, vel, edge_attr, charges, locs, out_indices
+        elif self.num_inputs > 1:    
             idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
             loc_inputs = loc[frame_0 + idxs]
             vel_inputs = vel[frame_0 + idxs]
-            # TODO: cosa fanno edge_attr?
-            return loc_inputs, vel_inputs, edge_attr, charges, locs
-
+            return loc_inputs, vel_inputs, edge_attr, charges, locs, out_indices
         
-        return loc[frame_0], vel[frame_0], edge_attr, charges, locs
+        return loc[frame_0], vel[frame_0], edge_attr, charges, locs, out_indices
 
 
 if __name__ == "__main__":
