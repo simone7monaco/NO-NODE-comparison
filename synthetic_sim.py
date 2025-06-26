@@ -330,6 +330,7 @@ class GravitySim(object):
         # pack together the acceleration components
         a = np.hstack((ax, ay, az))
         return a
+    
 
     def _energy(self, pos, vel, mass, G):
         # Kinetic Energy:
@@ -358,9 +359,7 @@ class GravitySim(object):
 
     def sample_trajectory(self, T=10000, sample_freq=10):
         assert (T % sample_freq == 0)
-
         T_save = int(T/sample_freq)
-
         N = self.n_balls
 
         pos_save = np.zeros((T_save, N, self.dim))
@@ -368,7 +367,9 @@ class GravitySim(object):
         force_save = np.zeros((T_save, N, self.dim))
 
         # Specific sim parameters
-        mass = np.ones((N, 1)) * np.random.randn(N, 1) * 0.1
+        mass = np.ones((N, 1))
+        mass += np.random.randn(N, 1) * self.loc_std * 0.1  # small random mass perturbation
+
         t = 0
         pos = np.random.randn(N, self.dim)   # randomly selected positions and velocities
         vel = np.random.randn(N, self.dim)
@@ -387,16 +388,12 @@ class GravitySim(object):
 
             # (1/2) kick
             vel += acc * self.dt/2.0
-
             # drift
             pos += vel * self.dt
-
             # update accelerations
             acc = self.compute_acceleration(pos, mass, self.interaction_strength, self.softening)
-
             # (1/2) kick
             vel += acc * self.dt/2.0
-
             # update time
             t += self.dt
 
@@ -405,6 +402,155 @@ class GravitySim(object):
         vel_save += np.random.randn(T_save, N, self.dim) * self.noise_var
         force_save += np.random.randn(T_save, N, self.dim) * self.noise_var
         return pos_save, vel_save, force_save, mass
+    
+    
+    def sample_trajectory_batch(self, T=10000, sample_freq=10, batch_size=1):
+        """Batched implementation - processes multiple simulations simultaneously"""
+        assert (T % sample_freq == 0)
+        T_save = int(T/sample_freq)
+        N = self.n_balls
+
+        # Output arrays with batch dimension first
+        pos_save = np.zeros((batch_size, T_save, N, self.dim))
+        vel_save = np.zeros((batch_size, T_save, N, self.dim))
+        force_save = np.zeros((batch_size, T_save, N, self.dim))
+
+        # Initialize batch parameters - shape: (batch_size, N, 1) or (batch_size, N, dim)
+        mass = np.ones((batch_size, N, 1))
+        mass += np.random.randn(batch_size, N, 1) * self.loc_std * 0.1
+
+        # Initialize positions and velocities for all batches
+        pos = np.random.randn(batch_size, N, self.dim)
+        vel = np.random.randn(batch_size, N, self.dim)
+
+        # Convert to Center-of-Mass frame for each batch
+        for b in range(batch_size):
+            vel[b] -= np.mean(mass[b] * vel[b], 0) / np.mean(mass[b])
+
+        # Calculate initial accelerations for all batches
+        acc = self.compute_acceleration_batch(pos, mass, self.interaction_strength, self.softening)
+
+        for i in range(T):
+            if i % sample_freq == 0:
+                save_idx = int(i/sample_freq)
+                pos_save[:, save_idx] = pos
+                vel_save[:, save_idx] = vel
+                force_save[:, save_idx] = acc * mass
+
+            # Leapfrog integration for all batches simultaneously
+            # (1/2) kick
+            vel += acc * self.dt/2.0
+            # drift
+            pos += vel * self.dt
+            # update accelerations
+            acc = self.compute_acceleration_batch(pos, mass, self.interaction_strength, self.softening)
+            # (1/2) kick
+            vel += acc * self.dt/2.0
+
+        # Add noise to observations
+        pos_save += np.random.randn(batch_size, T_save, N, self.dim) * self.noise_var
+        vel_save += np.random.randn(batch_size, T_save, N, self.dim) * self.noise_var
+        force_save += np.random.randn(batch_size, T_save, N, self.dim) * self.noise_var
+        
+        return pos_save, vel_save, force_save, mass
+
+    def compute_acceleration_batch(self, pos, mass, G, softening):
+        """Fully vectorized batched acceleration computation"""
+        batch_size, N, dim = pos.shape
+        
+        # Extract coordinates for all batches: shape (batch_size, N, 1)
+        x = pos[:, :, 0:1]  # (batch_size, N, 1)
+        y = pos[:, :, 1:2]  # (batch_size, N, 1)
+        z = pos[:, :, 2:3]  # (batch_size, N, 1)
+        
+        # Compute pairwise separations for all batches simultaneously
+        # Broadcasting: (batch_size, N, 1) - (batch_size, 1, N) = (batch_size, N, N)
+        dx = x.transpose(0, 2, 1) - x  # (batch_size, N, N)
+        dy = y.transpose(0, 2, 1) - y  # (batch_size, N, N)
+        dz = z.transpose(0, 2, 1) - z  # (batch_size, N, N)
+        
+        inv_r3 = (dx**2 + dy**2 + dz**2 + softening**2)
+        inv_r3 = np.where(inv_r3 > 0, inv_r3**(-1.5), 0.0)
+        
+        ax = G * np.matmul(dx * inv_r3, mass)  # (batch_size, N, 1)
+        ay = G * np.matmul(dy * inv_r3, mass)  # (batch_size, N, 1)
+        az = G * np.matmul(dz * inv_r3, mass)  # (batch_size, N, 1)
+        
+        # Stack accelerations: (batch_size, N, 3)
+        acc = np.concatenate([ax, ay, az], axis=2)
+        return acc    
+
+
+
+def test_exact_equivalence(batch_size=1):
+    """Test that single simulation matches first element of batch when using same random state"""
+    
+    print("\n=== Testing Exact Equivalence ===\n")
+    
+    # Create simulation instance
+    N = 5
+    initial_vel_norm = 0.5
+    sim = GravitySim(noise_var=0.0, n_balls=N, vel_norm=initial_vel_norm)
+    T = 100
+    sample_freq = 10
+
+    np.random.seed(123)
+
+    ##################
+
+    # Initialize batch parameters - shape: (batch_size, N, 1) or (batch_size, N, dim)
+    mass = np.ones((batch_size, N, 1))
+    mass += np.random.randn(batch_size, N, 1) * sim.loc_std * 0.1
+
+    # Initialize positions and velocities for all batches
+    pos = np.random.randn(batch_size, N, sim.dim)
+    vel = np.random.randn(batch_size, N, sim.dim)
+    for b in range(batch_size):
+        vel[b] -= np.mean(mass[b] * vel[b], 0) / np.mean(mass[b])
+    #####
+    from copy import deepcopy
+
+    batch_pos, batch_vel, batch_force, batch_mass = sim.sample_trajectory_batch(T=T, sample_freq=sample_freq, batch_size=batch_size, bases=
+                                                                                {
+                                                                                    'pos': deepcopy(pos),
+                                                                                    'vel': deepcopy(vel),
+                                                                                    'mass': deepcopy(mass)
+                                                                                })
+
+    # Run single simulation
+    single_poss, single_vels, single_forces, single_masses = [], [], [], []
+    for i in range(batch_size):
+        single_pos, single_vel, single_force, single_mass = sim.sample_trajectory(T=T, sample_freq=sample_freq, bases={
+            'pos': pos[i],
+            'vel': vel[i],
+            'mass': mass[i]
+        } )
+        single_poss.append(single_pos)
+        single_vels.append(single_vel)
+        single_forces.append(single_force)
+        single_masses.append(single_mass)
+    single_pos = np.stack(single_poss, axis=0)
+    single_vel = np.stack(single_vels, axis=0)
+    single_force = np.stack(single_forces, axis=0)
+    single_mass = np.stack(single_masses, axis=0)
+    
+    # Compare results
+    pos_diff = np.max(np.abs(single_pos - batch_pos))
+    vel_diff = np.max(np.abs(single_vel - batch_vel))
+    force_diff = np.max(np.abs(single_force - batch_force))
+    mass_diff = np.max(np.abs(single_mass - batch_mass))
+    
+    print(f"Maximum differences between single and batch[0]:")
+    print(f"Positions: {pos_diff:.2e}")
+    print(f"Velocities: {vel_diff:.2e}")
+    print(f"Forces: {force_diff:.2e}")
+    print(f"Masses: {mass_diff:.2e}")
+    
+    tolerance = 1e-10
+    if all(diff < tolerance for diff in [pos_diff, vel_diff, force_diff, mass_diff]):
+        print(f"\n✓ EXACT EQUIVALENCE VERIFIED (within tolerance {tolerance})")
+    else:
+        print(f"\n✗ Differences exceed tolerance {tolerance}")
 
 
 if __name__ == '__main__':

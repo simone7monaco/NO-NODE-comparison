@@ -31,6 +31,8 @@ class NBodyDataset():
         vel = np.load(self.root / f'vel_{self.suffix}.npy')
         edges = np.load(self.root / f'edges_{self.suffix}.npy')
         charges = np.load(self.root / f'charges_{self.suffix}.npy')
+        if self.dataset == "gravity":
+            assert (charges > 0).all(), "Charges (i.e. masses) in gravity dataset should be positive"
         
         # TODO: check dimensions and charges in gravity dataset
         loc, vel, edge_attr, edges, charges = self.preprocess(loc, vel, edges, charges)

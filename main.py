@@ -48,7 +48,7 @@ def get_args():
     parser.add_argument('--outf', type=Path, default='results', help='Output folder')
     # Experiment parameters
     parser.add_argument('--dT', type=int, default=1, help='Time step size (default: 1). It applies to EGNO only as it accepts a fixed number of snaphots.')
-    parser.add_argument('--num_timesteps', type=int, default=10, #choices=[2, 5, 10],
+    parser.add_argument('--num_timesteps', type=int, default=None, #choices=[2, 5, 10],
                     help='Distance in dT between one snaphot an the other.')
     
     parser.add_argument('--varDT', type=str2bool, default=False, choices=[True, False], help='Use variable time steps for the model (replaces dT).')
@@ -73,6 +73,8 @@ def main(args):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     args.device = device
+    if args.num_timesteps is None:
+        args.num_timesteps = config['num_timesteps']
 
     # Common objects
     model_save_path = args.outf / args.exp_name / f'{args.model.upper()}_{args.dataset}_seed={seed}_n_part={args.n_balls}_n_inputs={args.num_inputs}_dT_{args.dT}_varDT={args.varDT}_num_timesteps={args.num_timesteps}.pth'

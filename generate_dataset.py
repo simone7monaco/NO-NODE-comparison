@@ -3,6 +3,7 @@ import time
 import numpy as np
 import argparse
 from pathlib import Path
+from tqdm import trange
 
 """
 nbody_small:   python3 -u generate_dataset.py --simulation=charged --num-train 10000 --seed 43 --suffix small
@@ -63,7 +64,27 @@ def generate_dataset(num_sims, length, sample_freq):
     vel_all = list()
     edges_all = list()
     charges_all = list()
-    for i in range(num_sims):
+    if hasattr(sim, 'sample_trajectory_batch'):
+        # Use batched sampling if available
+        batch_size = 50
+        num_batches = num_sims // batch_size + (num_sims % batch_size > 0)
+        for i in trange(num_batches):
+            t = time.time()
+            loc, vel, edges, charges = sim.sample_trajectory_batch(T=length,
+                                                                  sample_freq=sample_freq,
+                                                                  batch_size=batch_size)
+            loc_all.append(loc)
+            vel_all.append(vel)
+            edges_all.append(edges)
+            charges_all.append(charges)
+            
+        loc_all = np.concatenate(loc_all, axis=0)
+        vel_all = np.concatenate(vel_all, axis=0)
+        edges_all = np.concatenate(edges_all, axis=0)
+        charges_all = np.concatenate(charges_all, axis=0)
+        return loc_all, vel_all, edges_all, charges_all
+    
+    for i in trange(num_sims):
         t = time.time()
         loc, vel, edges, charges = sim.sample_trajectory(T=length,
                                                          sample_freq=sample_freq)
@@ -73,8 +94,8 @@ def generate_dataset(num_sims, length, sample_freq):
         edges_all.append(edges)
         charges_all.append(charges)
 
-        if i % 100 == 0:
-            print("Iter: {}, Simulation time: {}".format(i, time.time() - t))
+        # if i % 100 == 0:
+        #     print("Iter: {}, Simulation time: {}".format(i, time.time() - t))
 
     charges_all = np.stack(charges_all)
     loc_all = np.stack(loc_all)
