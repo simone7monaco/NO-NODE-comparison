@@ -40,6 +40,8 @@ class NBodyDataset():
         # cast to torch and swap n_nodes <--> n_features dimensions
         if loc.shape[2:] == (3, self.n_balls):
             loc, vel = torch.Tensor(loc).transpose(2, 3), torch.Tensor(vel).transpose(2, 3)
+        else:
+            loc, vel = torch.Tensor(loc).float(), torch.Tensor(vel).float()
         assert loc.shape[2:] == (self.n_balls, 3), "Location tensor shape mismatch"
         n_nodes = loc.size(2)
         loc = loc[0:self.max_samples, :, :, :]  # limit number of samples
