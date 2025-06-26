@@ -214,7 +214,7 @@ def rollout_fn(model, h, loc, edge_index, vel, edge_attr, batch,
             # assume loc to have shape (BN, T, 3), remove the first T and concat the predicted loc, same for vel
             loc = torch.cat((loc[:, 1:, :], loc_p.unsqueeze(1)), dim=1)  # (BN, T, 3)
             vel = torch.cat((vel[:, 1:, :], vel_p.unsqueeze(1)), dim=1)  # (BN, T, 3)
-            h = torch.sqrt(torch.sum(vel ** 2, dim=1)).unsqueeze(-1) # (BN, T, 1)
+            h = torch.sqrt(torch.sum(vel ** 2, dim=-1)).unsqueeze(-1) # (BN, T, 1)
             loc_dist = torch.sum((loc[rows, -1, :] - loc[cols, -1, :])**2, 1).unsqueeze(1)  # relative distances among LAST locations
         else:
             loc = loc_p  # predicted
