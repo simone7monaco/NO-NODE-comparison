@@ -46,6 +46,9 @@ def get_args():
     parser.add_argument('--n_balls', type=int, default=5,
                         help='Number of balls in the nbody dataset')
     parser.add_argument('--outf', type=Path, default='results', help='Output folder')
+    parser.add_argument('--load_checkpoint', type=str2bool, default=True,
+                        help='Load a checkpoint from the model_save_path.')
+    
     # Experiment parameters
     parser.add_argument('--dT', type=int, default=1, help='Time step size (default: 1). It applies to EGNO only as it accepts a fixed number of snaphots.')
     parser.add_argument('--num_timesteps', type=int, default=None, #choices=[2, 5, 10],
@@ -80,7 +83,7 @@ def main(args):
     model_save_path = args.outf / args.exp_name / f'{args.model.upper()}_{args.dataset}_seed={seed}_n_part={args.n_balls}_n_inputs={args.num_inputs}_dT_{args.dT}_varDT={args.varDT}_num_timesteps={args.num_timesteps}.pth'
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
     print(f'Model saved to {model_save_path}')
-    early_stopping = EarlyStopping(patience=15, verbose=True, path=model_save_path)
+    early_stopping = EarlyStopping(patience=10, verbose=True, path=model_save_path)
     loss_mse = nn.MSELoss()
     loss_mse_no_red = nn.MSELoss(reduction='none')
 
@@ -129,6 +132,12 @@ def main(args):
     
     # print(args.num_inputs,args.varDT, args.n_balls)
     print(f"Num particles: {args.n_balls}, VarDT: {args.varDT}, Num inputs: {args.num_inputs}, Num timesteps: {args.num_timesteps}, dT: {args.dT}")
+
+    if args.load_checkpoint and model_save_path.exists():
+        print(f"📂 Loading model from {model_save_path}")
+        model.load_state_dict(torch.load(model_save_path, weights_only=True))
+    else:
+        print("▶️ Training from scratch.")
 
     loader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True)
     loader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, drop_last=True)
