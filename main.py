@@ -30,7 +30,7 @@ def get_args():
     parser.add_argument('--exp_name', type=str, default='0exp_new', help='Experiment name')
     parser.add_argument('--config', type=str, default='model_confs.yaml')
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size.')
-    parser.add_argument('--epochs', type=int, default=700, # 1000,
+    parser.add_argument('--epochs', type=int, default= 1000,
                         help='number of epochs to train (default: 1000)')
     parser.add_argument('--data_dir', type=Path, default='data')
     parser.add_argument('--dataset', type=str, default='charged', choices=['charged', 'gravity'],
