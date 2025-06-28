@@ -177,15 +177,17 @@ def tot_energy_gravity_batch(loc, vel, mass, G=1.0):
     return KE + PE
 
 def conserved_energy_fun(dataset, loc, vel, edges, batch=None):
-    edge_matr, _ = to_dense_batch(edges, batch)
+    assert edges.ndim == 2 and edges.shape[1] == 1
+    edge_matr = to_dense_batch(edges, batch)[0]
+    edge_single = edge_matr.cpu().numpy()
     edge_matr = edge_matr.cpu().numpy().repeat(edge_matr.shape[1], axis=2)
     edge_matr = np.einsum('tij,tji ->tij', edge_matr, edge_matr)
 
-    edge_single = to_dense_batch(edges, batch)[0].cpu().numpy()
-    nploc, _ = to_dense_batch(loc, batch)
-    npvel, _ = to_dense_batch(vel, batch)
-    nploc = nploc.cpu().numpy() # (B, N, 3)
-    npvel = npvel.cpu().numpy()
+    if loc.ndim == 2:
+        loc, _ = to_dense_batch(loc, batch)
+        vel, _ = to_dense_batch(vel, batch)
+    nploc = loc.cpu().numpy() # (B, N, 3)
+    npvel = vel.cpu().numpy()
 
     # for i in range(nploc.shape[0]):
     if dataset == "gravity":

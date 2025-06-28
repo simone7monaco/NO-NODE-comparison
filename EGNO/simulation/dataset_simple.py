@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from utils import conserved_energy_fun
+from EGNO.utils import random_ascending_tensor
 
 
 class NBodyDataset():
@@ -131,55 +132,33 @@ class NBodyDynamicsDataset(NBodyDataset):
         loc, vel, edge_attr, charges = loc[i], vel[i], edge_attr[i], charges[i]
 
         frame_0 = self.start
-        frame_T = frame_0 + self.num_timesteps * self.dT
-        
-        if self.traj_len > 1:
-                
-            # if self.var_dt:
-            #     #return all locs so that after its possible to select different delta T across the trajectory
-            #     return loc[frame_0], vel[frame_0], edge_attr, charges, loc 
-            
-            out_indices = []
-            delta_frame = frame_T - frame_0
-            for i in range(self.traj_len):
-                last = False
-                if last:
-                    oidx = torch.tensor([frame_0 + delta_frame + ii - self.num_timesteps for ii in range(1, self.num_timesteps + 1)])
-                else:
-                    oidx = torch.tensor([frame_0 + delta_frame * ii // self.num_timesteps for ii in range(1, self.num_timesteps + 1)])
-                
-                out_indices.append(oidx)
-                
-                locs = loc[oidx].transpose(1, 0)
-                vels = vel[oidx].transpose(1, 0)
-                
-                if i == 0: # first iter
-                    locs_m = locs
-                    vels_m = vels
-                else:
-                    locs_m = np.concatenate((locs_m,locs),axis=1)
-                    vels_m = np.concatenate((vels_m,vels),axis=1)
+        frame_T = frame_0 + self.num_timesteps*self.traj_len * self.dT
+        if self.num_inputs > 1:
+            # inputs are all BEFORE frame_0
+            if self.var_dt:
+                # random inputs
+                timesteps_in = random_ascending_tensor(length=self.num_inputs-1, max_value=self.num_timesteps-1, min_value=1) # deltas bethween inputs
+                timesteps_in = torch.cat((torch.tensor([0]), timesteps_in), dim=0)  # add first input at frame_0
+            else:
+                # equispaced inputs
+                timesteps_in = (torch.arange(self.num_timesteps) * self.dT)[:self.num_inputs]
 
-                frame_0 += self.num_timesteps
-                
-            frame_0 = self.start
-            locs = locs_m
-            out_indices = torch.stack(out_indices)
+            timesteps_in = - torch.flip(timesteps_in, dims=(0,))  # flip to have descending order
+            frame_0 = (frame_0 + timesteps_in * self.dT)
+            if (frame_0<0).any():
+                # push to the first frame
+                frame_T += -frame_0.min()
+                frame_0 += -frame_0.min()
+            out_indices = torch.arange(frame_0[-1]+1, frame_T+1, self.dT)
         else:
+            timesteps_in = torch.tensor([0]).int()
             out_indices = torch.arange(frame_0+1, frame_T+1, self.dT)
-            locs = loc[out_indices].transpose(1, 0) 
-            vels = vel[out_indices].transpose(1, 0)  
-            # shape (n_balls, T, 3)
+    
+        locs_out = loc[out_indices].transpose(1, 0) 
+        # vels_out = vel[out_indices].transpose(1, 0)  
+        # shape (n_balls, T, 3)
 
-        if self.var_dt and self.num_inputs>1: 
-            return loc, vel, edge_attr, charges, locs, out_indices
-        elif self.num_inputs > 1:    
-            idxs = torch.linspace(0, self.num_timesteps - 1, self.num_inputs, dtype=int)
-            loc_inputs = loc[frame_0 + idxs]
-            vel_inputs = vel[frame_0 + idxs]
-            return loc_inputs, vel_inputs, edge_attr, charges, locs, out_indices
-        
-        return loc[frame_0], vel[frame_0], edge_attr, charges, locs, out_indices
+        return loc[frame_0], vel[frame_0], edge_attr, charges, locs_out, frame_0, out_indices
 
 
 if __name__ == "__main__":
