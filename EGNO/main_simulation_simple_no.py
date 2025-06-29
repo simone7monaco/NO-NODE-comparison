@@ -249,10 +249,12 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
             energies_allsteps = energies_allsteps.permute(1,0,2) # (B, T, 1)
             if first:
                 traj_pred = loc_pred
+                traj_true = loc_true.transpose(1,2) # (B, T, N, 3)
                 traj_energies = energies_allsteps
                 first = False
             else:
                 traj_pred = torch.cat((traj_pred, loc_pred), dim=0)
+                traj_true = torch.cat((traj_true, loc_true.transpose(1,2)), dim=0)
                 traj_energies = torch.cat((traj_energies, energies_allsteps), dim=0)
 
             loc_pred = loc_pred.transpose(1, 2) # [B, N, T*, 3]
@@ -300,7 +302,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
 
     if rollout:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss,"avg_num_steps": res['avg_num_steps']}, step=epoch)
-        return torch.tensor(res['losses']).mean(0)[:10].tolist(), {'targets': loc_true, 'preds': traj_pred, 'energy_conservation': traj_energies, 'test_loss': avg_loss}
+        return torch.tensor(res['losses']).mean(0)[:10].tolist(), {'targets': traj_true, 'preds': traj_pred, 'energy_conservation': traj_energies, 'test_loss': avg_loss}
         # torch.stack((traj_targ,traj_pred), dim=0)
     else:
         wandb.log({f"{loader.dataset.partition}_loss": avg_loss}, step=epoch)

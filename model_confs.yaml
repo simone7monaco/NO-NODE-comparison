@@ -1,5 +1,5 @@
 EGNO:
-  num_timesteps: 5
+  num_timesteps: 10
   model_params:
     n_layers: 4
     hidden_nf: 64

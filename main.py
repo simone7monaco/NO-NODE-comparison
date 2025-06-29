@@ -48,6 +48,7 @@ def get_args():
     parser.add_argument('--outf', type=Path, default='results', help='Output folder')
     parser.add_argument('--load_checkpoint', type=str2bool, default=True,
                         help='Load a checkpoint from the model_save_path.')
+    parser.add_argument('--device', type=str, default=None)
     
     # Experiment parameters
     parser.add_argument('--dT', type=int, default=1, help='Time step size (default: 1). It applies to EGNO only as it accepts a fixed number of snaphots.')
@@ -74,8 +75,9 @@ def main(args):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    args.device = device
+    if args.device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        args.device = device
     if args.num_timesteps is None:
         args.num_timesteps = config['num_timesteps']
 
@@ -105,7 +107,7 @@ def main(args):
 
         params = config['model_params'] | dict(varDT=args.varDT, 
                                                multiple_agg='attn' if args.num_inputs > 1 else None,
-                                               device=device)
+                                               device=args.device)
         
         model = SEGNO(**params)
         criterion = (loss_mse,loss_mse_no_red)
@@ -126,7 +128,7 @@ def main(args):
                                          num_timesteps=args.num_timesteps, num_inputs=args.num_inputs, 
                                          traj_len=args.traj_len, varDT= args.varDT, dT=args.dT)
         
-        params = config['model_params'] | dict(num_timesteps=args.num_timesteps, num_inputs=args.num_inputs, varDT=args.varDT, device=device)
+        params = config['model_params'] | dict(num_timesteps=args.num_timesteps, num_inputs=args.num_inputs, varDT=args.varDT, device=args.device)
         model = EGNO(**params)
         criterion = loss_mse_no_red
     

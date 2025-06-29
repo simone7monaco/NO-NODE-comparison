@@ -89,7 +89,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 data[i] = data[i][:, :data[i].size(1), :].contiguous()
                 data[i] = data[i].view(-1, data[i].size(-1))  
 
-        locs, vels, edge_attr, charges, loc_ends = data
+        locs, vels, edge_attr, charges = data
         prod_charges = charges[rows] * charges[cols]
 
         if args.num_inputs > 1:
@@ -128,10 +128,11 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
 
             all_indices = start + np.cumsum([0] + steps)
             pred_indices = all_indices[args.num_inputs:]
+            pred_indices = pred_indices[pred_indices < locs.size(0)]
             locs_end = locs[pred_indices].to(device) # (T, BN, 3)
 
             locs_pred, energies = rollout_fn(model, h, loc, edge_index, vel, edge_attr, batch, 
-                                             args.traj_len, num_steps=T, num_prev=args.num_inputs, charges=charges,
+                                             len(pred_indices), num_steps=T, num_prev=args.num_inputs, charges=charges,
                                              energy_fun=loader.dataset.energy_fun, gt=locs_end)
             #locs_pred shape: [T, BN, 3], energy shape: [T, B, 1]
 
@@ -152,7 +153,7 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
                 traj_energies = torch.cat((traj_energies, energies), dim=0)
 
             #loss with metric (A-MSE)
-            losses = loss_mse_no_red(locs_pred, locs_end).view(args.traj_len, batch_size * n_nodes, 3)
+            losses = loss_mse_no_red(locs_pred, locs_end).view(-1, batch_size * n_nodes, 3)
             losses = torch.mean(losses, dim=(1, 2))
             loss = torch.mean(losses)
             res['losses'].append(losses.cpu().tolist())

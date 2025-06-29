@@ -76,7 +76,7 @@ class NBodyDataset():
         loc, vel, edge_attr, charges = self.data
         loc, vel, edge_attr, charges = loc[i], vel[i], edge_attr[i], charges[i]
 
-        return loc, vel, edge_attr, charges, loc
+        return loc, vel, edge_attr, charges
 
     def __len__(self):
         return len(self.data[0])

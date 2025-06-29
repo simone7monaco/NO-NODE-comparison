@@ -21,6 +21,8 @@ BASE:
       - 20
     num_inputs:
       value: 1
+    varDT:
+      value: false
     seed:
       values:
       - 1
