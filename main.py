@@ -87,7 +87,7 @@ def main(args):
     model_save_path = args.outf / args.exp_name / f'{args.model.upper()}_{args.dataset}_seed={seed}_n_part={args.n_balls}_n_inputs={args.num_inputs}_dT_{args.dT}_varDT={args.varDT}_num_timesteps={args.num_timesteps}.pth'
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
     print(f'Model saved to {model_save_path}')
-    early_stopping = EarlyStopping(patience=10, verbose=True, path=model_save_path)
+    early_stopping = EarlyStopping(patience=15, verbose=True, path=model_save_path)
     loss_mse = nn.MSELoss()
     loss_mse_no_red = nn.MSELoss(reduction='none')
 
