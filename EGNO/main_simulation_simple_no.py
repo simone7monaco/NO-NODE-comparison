@@ -226,13 +226,13 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
         loc, vel, edge_attr, nodes, loc_mean = prepare_inputs(loc, vel, edge_attr_o, edges, n_nodes, args.num_inputs, charges)
         
         if rollout:
-            traj_len = args.traj_len            
+            traj_len = min(args.traj_len, out_indices.size(1) // args.num_timesteps)
 
             locs_pred_batch, energies, energies_allsteps = rollout_fn(model, nodes, loc, edges, vel, edge_attr_o, edge_attr,loc_mean, n_nodes, traj_len, batch_size,
                                                                 charges=charges, num_steps=num_timesteps, timesteps_in=in_indices, timesteps_out=out_indices,
                                                                 energy_fun=loader.dataset.energy_fun)
-            locs_pred_batch = locs_pred_batch
-            locs_true_batch = loc_true.view(batch_size * n_nodes, num_timesteps*traj_len, 3).transpose(0, 1)
+            locs_true_batch = loc_true.view(batch_size * n_nodes, -1, 3).transpose(0, 1)[:locs_pred_batch.size(0)]
+
 
             corr, avg_num_steps, first_invalid_idx = pearson_correlation_batch(locs_pred_batch, locs_true_batch, n_nodes) #locs_pred[::10]
             #print(first_invalid_idx)
@@ -242,8 +242,6 @@ def run_epoch(model, optimizer, criterion, epoch, loader, args, backprop=True, r
             
             locs_pred_batch = locs_pred_batch[:sup]
             energies_allsteps = energies_allsteps[:sup]
-
-            
             
             loc_pred = to_dense_batch(locs_pred_batch.permute(1,0,2), batch)[0].permute(0, 2, 1, 3) # (B, T, N, 3)
             energies_allsteps = energies_allsteps.permute(1,0,2) # (B, T, 1)

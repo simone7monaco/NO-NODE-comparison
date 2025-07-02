@@ -55,7 +55,6 @@ PRO:
       values:
       - 5
       - 10
-      - 20
     num_inputs:
       values: [2, 3]
     seed:

@@ -153,7 +153,10 @@ class NBodyDynamicsDataset(NBodyDataset):
         else:
             timesteps_in = torch.tensor([0]).int()
             out_indices = torch.arange(frame_0+1, frame_T+1, self.dT)
-    
+
+        if out_indices.max() >= loc.size(0):
+            # reduce out_indices to the maximum available frame
+            out_indices = out_indices[out_indices < loc.size(0)]
         locs_out = loc[out_indices].transpose(1, 0) 
         # vels_out = vel[out_indices].transpose(1, 0)  
         # shape (n_balls, T, 3)
