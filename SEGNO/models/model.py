@@ -68,7 +68,7 @@ class SEGNO(nn.Module):
             his = his.unsqueeze(1)
             steps = [T]
         else:
-            steps = torch.diff(torch.tensor(in_steps.tolist() + [T]))
+            steps = torch.diff(in_steps).tolist() + [T]
 
         h = self.embedding(his)
 
