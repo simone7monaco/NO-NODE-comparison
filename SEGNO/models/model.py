@@ -12,7 +12,7 @@ class SEGNO(nn.Module):
         self.varDT = varDT
         self.multiple_agg = multiple_agg
         if multiple_agg == 'attn':
-            self.enc_attn_net = InvariantTemporalAttention(in_node_nf, hidden_dim=hidden_nf)
+            self.enc_attn_net = InvariantTemporalAttention(hidden_nf, hidden_dim=hidden_nf)
 
         self.device = device
         self.n_layers = n_layers
@@ -50,21 +50,70 @@ class SEGNO(nn.Module):
             
         return x, h, v
     
-    def prepare_node_inputs(self, loc_seq, vel_seq, his_seq, in_steps):
+    def forward(self, his, x, edges, v, edge_attr, T=10, in_steps=None):
+        """
+        Forward pass for SEGNO model.
+        
+        Args:
+            his: node features of shape [BN (, T), F]
+            x, v: node locations and velocities of shape [BN (, T), 3]
+            edges: edge indices of shape [2, E]
+            edge_attr: edge attributes of shape [E, D]
+            T: number of time steps to predict (default: 10)
+            in_steps: input steps of the input sequences (if more than one input is provided)
+        """
+        if not len(x.size()) == 3:
+            x = x.unsqueeze(1)  # Ensure x is of shape [BN, 1, 3]
+            v = v.unsqueeze(1)
+            his = his.unsqueeze(1)
+            steps = [T]
+        else:
+            steps = torch.diff(torch.tensor(in_steps.tolist() + [T]))
+
+        h = self.embedding(his)
+
+        h_ = h[:, 0, :]
+        x_ = x[:, 0, :]
+        v_ = v[:, 0, :]
+        for i, step in enumerate(steps):
+            xi, hi, vi = self.forward_step(h_, x_, edges, v_, edge_attr, T=step)
+            # sum to get the residual
+            if i < len(steps) - 1:
+                if self.multiple_agg == 'sum':
+                    h_ = h[:, i+1, :] + hi
+                    x_ = x[:, i+1, :] + xi
+                    v_ = v[:, i+1, :] + vi
+                elif self.multiple_agg == 'attn':
+                    hs = torch.stack([h[:, i+1, :], hi], dim=1)  # (BN, 2, F)
+                    xs = torch.stack([x[:, i+1, :], xi], dim=1)  # (BN, 2, 3)
+                    vs = torch.stack([v[:, i+1, :], vi], dim=1)  # (BN, 2, 3)
+                    x_, v_, h_ = self.prepare_node_inputs(xs, vs, hs)
+
+        return x_, h_, v_
+
+    
+    def forward_step(self, h, x, edges, v, edge_attr, T=10):
+        self.module.n_layers = T
+        self.n_layers = T
+
+        for _ in range(self.n_layers):
+            h, x, v, _ = self.module(h, edges, x, v, v, edge_attr=edge_attr)
+            
+        return x, h, v
+                     
+    
+    def prepare_node_inputs(self, loc_seq, vel_seq, his_seq):
         """
         loc_seq: (BN, T, 3)
         vel_seq: (BN, T, 3)
         his_seq: (BN, T, F)
-        in_steps: (T)
 
         Returns:
         - loc_init: (BN, 3)
         - vel_init: (BN, 3)
         - his_init: (BN, F)
         """
-        # repeat in_steps to have shape (BN, T, 1)
-        in_steps = in_steps.repeat(loc_seq.size(0), 1).unsqueeze(-1)  # (BN, T, 1)
-        attn = self.enc_attn_net(vel_seq, his_seq, in_steps)  # (BN, T, 1)
+        attn = self.enc_attn_net(vel_seq, his_seq)  # (BN, T, 1)
 
         # Weighted sum over time
         loc_init = (attn * loc_seq).sum(dim=1)  # (BN, 3)
@@ -78,14 +127,14 @@ class InvariantTemporalAttention(nn.Module):
     def __init__(self, in_dim, hidden_dim=32):
         super().__init__()
         self.attn_mlp = nn.Sequential(
-            nn.Linear(in_dim+2, hidden_dim),
+            nn.Linear(in_dim+1, hidden_dim),
             nn.Tanh(),
             nn.Linear(hidden_dim, 1)
         )
 
-    def forward(self, vel_seq, his_seq, in_steps):
+    def forward(self, vel_seq, his_seq):
         speed = vel_seq.norm(dim=-1, keepdim=True)  # (N, T, 1)
-        feats = torch.cat([speed, his_seq, in_steps], dim=-1)  # (N, T, F+2)
+        feats = torch.cat([speed, his_seq], dim=-1)  # (N, T, F+1)
         attn_weights = self.attn_mlp(feats).softmax(dim=1)
         return attn_weights
 
