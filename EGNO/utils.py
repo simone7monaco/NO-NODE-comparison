@@ -131,24 +131,6 @@ def repeat_elements_to_exact_shape(tensor_list, n, outdims=None):
     return final_tensor
 
 
-def random_ascending_tensor(length, min_value=0, max_value=9):
-    """
-    Generates a random tensor of specified length, in ascending order, with no duplicates.
-    
-    Args:
-    - length (int): Desired length of the output tensor.
-    - min_value (int): Minimum possible value (inclusive).
-    - max_value (int): Maximum possible value (inclusive).
-    
-    Returns:
-    - torch.Tensor: A 1-D tensor with unique, ascending random values.
-    """
-    # Generate a sorted list of unique random values
-    unique_values = torch.randperm(max_value - min_value + 1)[:length] + min_value
-    unique_values = unique_values.sort().values  # Sort the values in ascending order
-    
-    return unique_values
-
 def _pack_edges(edge_list, n_node):
     for idx, edge in enumerate(edge_list):
         edge[0] += idx * n_node

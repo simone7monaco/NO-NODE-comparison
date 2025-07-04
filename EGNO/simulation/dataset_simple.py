@@ -1,7 +1,6 @@
 import numpy as np
 import torch
-from utils import conserved_energy_fun
-from EGNO.utils import random_ascending_tensor
+from utils import conserved_energy_fun, random_ascending_tensor
 
 
 class NBodyDataset():

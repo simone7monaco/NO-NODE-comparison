@@ -25,13 +25,13 @@ class SEGNO(nn.Module):
                                                         norm_diff=norm_diff, tanh=tanh, norm_vel=norm_vel)
         self.to(self.device)
 
-    def forward(self, his, x, edges, v, edge_attr, T=10):
+    def forward(self, his, x, edges, v, edge_attr, T=10, in_steps=None):
         """
         Loc, vel can be n_inputs * 3 as dimension if n_inputs > 1
         """
         if len(x.size()) == 3:  # we are in the case of n_inputs > 1, loc is [n_inputs, batch_size*n_balls, 3]
             if self.multiple_agg == 'attn':
-                x, v, his = self.prepare_node_inputs(x, v, his)
+                x, v, his = self.prepare_node_inputs(x, v, his, in_steps=in_steps)
             elif self.multiple_agg == 'sum':
                 assert x.size(0) == 2, "For sum aggregation, x should have 2 inputs per forward call."
                 x = x.sum(dim=0)
@@ -50,18 +50,21 @@ class SEGNO(nn.Module):
             
         return x, h, v
     
-    def prepare_node_inputs(self, loc_seq, vel_seq, his_seq):
+    def prepare_node_inputs(self, loc_seq, vel_seq, his_seq, in_steps):
         """
         loc_seq: (BN, T, 3)
         vel_seq: (BN, T, 3)
         his_seq: (BN, T, F)
+        in_steps: (T)
 
         Returns:
         - loc_init: (BN, 3)
         - vel_init: (BN, 3)
         - his_init: (BN, F)
         """
-        attn = self.enc_attn_net(vel_seq, his_seq)  # (BN, T, 1)
+        # repeat in_steps to have shape (BN, T, 1)
+        in_steps = in_steps.repeat(loc_seq.size(0), 1).unsqueeze(-1)  # (BN, T, 1)
+        attn = self.enc_attn_net(vel_seq, his_seq, in_steps)  # (BN, T, 1)
 
         # Weighted sum over time
         loc_init = (attn * loc_seq).sum(dim=1)  # (BN, 3)
@@ -75,14 +78,14 @@ class InvariantTemporalAttention(nn.Module):
     def __init__(self, in_dim, hidden_dim=32):
         super().__init__()
         self.attn_mlp = nn.Sequential(
-            nn.Linear(in_dim+1, hidden_dim),
+            nn.Linear(in_dim+2, hidden_dim),
             nn.Tanh(),
             nn.Linear(hidden_dim, 1)
         )
 
-    def forward(self, vel_seq, his_seq):
+    def forward(self, vel_seq, his_seq, in_steps):
         speed = vel_seq.norm(dim=-1, keepdim=True)  # (N, T, 1)
-        feats = torch.cat([speed, his_seq], dim=-1)  # (N, T, F+1)
+        feats = torch.cat([speed, his_seq, in_steps], dim=-1)  # (N, T, F+2)
         attn_weights = self.attn_mlp(feats).softmax(dim=1)
         return attn_weights
 

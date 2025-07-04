@@ -12,6 +12,24 @@ def reshape_sample(sample):
     sample = sample.transpose(0, 2, 1)      # (T, 3, N)
     return sample
 
+def random_ascending_tensor(length, min_value=0, max_value=9):
+    """
+    Generates a random tensor of specified length, in ascending order, with no duplicates.
+    
+    Args:
+    - length (int): Desired length of the output tensor.
+    - min_value (int): Minimum possible value (inclusive).
+    - max_value (int): Maximum possible value (inclusive).
+    
+    Returns:
+    - torch.Tensor: A 1-D tensor with unique, ascending random values.
+    """
+    # Generate a sorted list of unique random values
+    unique_values = torch.randperm(max_value - min_value + 1)[:length] + min_value
+    unique_values = unique_values.sort().values  # Sort the values in ascending order
+    
+    return unique_values
+
 def cumulative_random_tensor_indices(size, start, end):
     # Generate the cumulative numpy array as before
     random_array = torch.randint(start, end, size=(size,))
