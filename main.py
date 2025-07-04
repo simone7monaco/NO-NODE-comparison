@@ -46,7 +46,7 @@ def get_args():
     parser.add_argument('--n_balls', type=int, default=5,
                         help='Number of balls in the nbody dataset')
     parser.add_argument('--outf', type=Path, default='results', help='Output folder')
-    parser.add_argument('--load_checkpoint', type=str2bool, default=True,
+    parser.add_argument('--load_checkpoint', type=str2bool, default=False,
                         help='Load a checkpoint from the model_save_path.')
     parser.add_argument('--scale_lr', type=float, default=None,
                         help='Scale the learning rate by this factor. If None, no scaling is applied (suggested value for finetuning: 0.2).')
